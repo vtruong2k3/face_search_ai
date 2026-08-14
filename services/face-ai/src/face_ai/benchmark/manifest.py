@@ -52,6 +52,7 @@ class ManifestEntry:
     subject_id: str | None
     path: PurePosixPath
     role: ImageRole
+    sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +147,15 @@ class BenchmarkManifest:
             fingerprint=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         )
 
+    def verify_dataset(self, dataset_root: Path) -> None:
+        try:
+            for entry in self.entries:
+                image = self.resolve_image(dataset_root, entry)
+                if _file_sha256(image) != entry.sha256:
+                    raise ManifestError("dataset verification failed")
+        except (ManifestError, OSError) as error:
+            raise ManifestError("dataset verification failed") from error
+
     def resolve_image(self, dataset_root: Path, entry: ManifestEntry) -> Path:
         root = dataset_root.resolve(strict=True)
         candidate = (root / Path(*entry.path.parts)).resolve(strict=True)
@@ -158,7 +168,7 @@ class BenchmarkManifest:
 
 def _entry(value: object) -> ManifestEntry:
     item = _mapping(value, "entry")
-    _keys(item, {"image_id", "subject_id", "path", "role"}, "entry")
+    _keys(item, {"image_id", "subject_id", "path", "role", "sha256"}, "entry")
     try:
         role = ImageRole(_text(item["role"], "entry role"))
     except ValueError as exc:
@@ -175,7 +185,16 @@ def _entry(value: object) -> ManifestEntry:
         subject_id=None if subject is None else _opaque(subject, "subject ID"),
         path=path,
         role=role,
+        sha256=_sha256(item["sha256"], "entry checksum"),
     )
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _mapping(value: object, name: str) -> dict[str, Any]:

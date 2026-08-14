@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -21,8 +22,20 @@ def manifest_value() -> dict[str, object]:
         },
         "search": {"limit": 5, "thresholds": [0.5], "top_k": [1]},
         "entries": [
-            {"image_id": "enroll-1", "subject_id": "subject-1", "path": "enrollment/a.jpg", "role": "enrollment"},
-            {"image_id": "query-1", "subject_id": "subject-1", "path": "queries/b.jpg", "role": "query"},
+            {
+                "image_id": "enroll-1",
+                "subject_id": "subject-1",
+                "path": "enrollment/a.jpg",
+                "role": "enrollment",
+                "sha256": hashlib.sha256(b"a").hexdigest(),
+            },
+            {
+                "image_id": "query-1",
+                "subject_id": "subject-1",
+                "path": "queries/b.jpg",
+                "role": "query",
+                "sha256": hashlib.sha256(b"b").hexdigest(),
+            },
         ],
     }
 
@@ -72,6 +85,7 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
         return {"status": "recommended"}
 
     dependencies = RunDependencies(
+        verify_dataset=lambda loaded, root: None,
         verify_model=lambda loaded: None,
         get_pipeline=lambda: pipeline,
         create_index=lambda loaded: index,
@@ -108,6 +122,50 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
     assert capsys.readouterr().out == "benchmark run completed\n"  # type: ignore[attr-defined]
 
 
+def test_run_command_rejects_dataset_before_model_pipeline_and_index(
+    tmp_path: Path, capsys: object
+) -> None:
+    manifest = tmp_path / "private-manifest.json"
+    manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
+    events: list[str] = []
+
+    def reject_dataset(loaded: object, root: Path) -> None:
+        events.append("dataset")
+        raise RuntimeError(f"private mismatch at {root}")
+
+    dependencies = RunDependencies(
+        verify_dataset=reject_dataset,
+        verify_model=lambda loaded: events.append("model"),
+        get_pipeline=lambda: events.append("pipeline"),
+        create_index=lambda loaded: events.append("index"),
+        execute=lambda **kwargs: events.append("execute") or {},
+        clock_ms=lambda: 0.0,
+    )
+
+    exit_code = main(
+        [
+            "run",
+            "--manifest",
+            str(manifest),
+            "--dataset-root",
+            str(tmp_path / "private-dataset"),
+            "--output",
+            str(tmp_path / "benchmark-results" / "run.json"),
+            "--max-far",
+            "0.01",
+            "--min-recall",
+            "0.9",
+        ],
+        run_dependencies=dependencies,
+    )
+
+    assert exit_code == 2
+    assert events == ["dataset"]
+    error = capsys.readouterr().err  # type: ignore[attr-defined]
+    assert error == "benchmark run failed\n"
+    assert str(tmp_path) not in error
+
+
 def test_run_command_verifies_model_before_pipeline_and_index(
     tmp_path: Path, capsys: object
 ) -> None:
@@ -120,6 +178,7 @@ def test_run_command_verifies_model_before_pipeline_and_index(
         raise RuntimeError(f"private mismatch at {tmp_path}")
 
     dependencies = RunDependencies(
+        verify_dataset=lambda loaded, root: None,
         verify_model=reject_model,
         get_pipeline=lambda: events.append("pipeline"),
         create_index=lambda loaded: events.append("index"),
@@ -155,6 +214,7 @@ def test_run_command_sanitizes_unavailable_pipeline(tmp_path: Path, capsys: obje
     manifest = tmp_path / "private-manifest.json"
     manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
     dependencies = RunDependencies(
+        verify_dataset=lambda loaded, root: None,
         verify_model=lambda loaded: None,
         get_pipeline=lambda: None,
         create_index=lambda loaded: (_ for _ in ()).throw(AssertionError("must not create index")),

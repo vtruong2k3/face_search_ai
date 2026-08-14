@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest
@@ -73,18 +74,21 @@ def manifest() -> BenchmarkManifest:
                     "subject_id": "subject-1",
                     "path": "enrollment/a.png",
                     "role": "enrollment",
+                    "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
                 },
                 {
                     "image_id": "query-1",
                     "subject_id": "subject-1",
                     "path": "queries/b.png",
                     "role": "query",
+                    "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
                 },
                 {
                     "image_id": "query-2",
                     "subject_id": None,
                     "path": "queries/c.png",
                     "role": "query",
+                    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
                 },
             ],
         }

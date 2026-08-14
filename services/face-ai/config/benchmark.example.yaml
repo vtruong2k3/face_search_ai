@@ -53,7 +53,10 @@ model:
 
 protocol:
   # Paths in the manifest must be relative to dataset.root. Image and subject
-  # identifiers must be opaque. A file may not appear in both roles.
+  # identifiers must be opaque. Every executable JSON entry must record the
+  # SHA-256 of its exact image bytes; a version label alone does not freeze data.
+  # Validation hashes every listed file before model or Qdrant initialization.
+  # A file may not appear in both roles.
   enrollment_role: "enrollment"
   query_role: "query"
   reject_split_overlap: true

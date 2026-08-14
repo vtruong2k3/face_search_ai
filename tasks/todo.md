@@ -22,6 +22,7 @@ Last updated: 2026-08-14
   - [x] Executable offline validation and synthetic benchmark CLI
   - [x] Executable real-benchmark composition path unit-verified
   - [x] Manifest checksums bound fail-closed to canonical local buffalo_l artifacts
+  - [x] Per-entry dataset bytes frozen by SHA-256 with fail-before-side-effects preflight
   - [x] Locked environment includes and imports InsightFace
   - [ ] Real authorized dataset and Qdrant benchmark run
 - [ ] Task 1.6: Calibrate threshold and report decision

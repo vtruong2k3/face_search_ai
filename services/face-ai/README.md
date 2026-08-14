@@ -57,7 +57,13 @@ Before a real benchmark, record the SHA-256 of every local ONNX artifact and use
 
 ## Reproducible benchmark core
 
-`config/benchmark.example.json` is the executable strict-JSON manifest example. It records frozen dataset/model identifiers, SHA-256 checksums, relative enrollment/query paths, search limits, and threshold candidates. The validator rejects unknown fields, duplicate IDs or paths, absolute/traversing paths, symlink escapes, malformed checksums, and use of `approved_non_commercial_poc` outside `personal_non_commercial_poc` mode.
+`config/benchmark.example.json` is the executable strict-JSON manifest example. It records frozen dataset/model identifiers, model and per-image SHA-256 checksums, relative enrollment/query paths, search limits, and threshold candidates. A dataset version is only a label; the per-entry checksums cryptographically bind the manifest fingerprint to the listed bytes. The validator rejects unknown fields, duplicate IDs or paths, absolute/traversing paths, symlink escapes, malformed or mismatched checksums, and use of `approved_non_commercial_poc` outside `personal_non_commercial_poc` mode.
+
+Calculate each image checksum locally without copying the dataset into Git, for example:
+
+```bash
+sha256sum /external/authorized-dataset/enrollment/image-001.jpg
+```
 
 The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, and linear-interpolated latency percentiles. Performance output aggregates decode/validation, detection, per-image alignment and embedding totals, conditional vector search, and end-to-end query timing, plus serial queries per second. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, raw timing samples, or per-query identity observations.
 
@@ -68,6 +74,8 @@ uv run --locked --project services/face-ai face-ai-benchmark validate \
   --manifest /external/benchmark.json \
   --dataset-root /external/authorized-dataset
 ```
+
+The validation command resolves every explicit entry under the external root and streams its SHA-256 before any model or Qdrant initialization. It does not retain dataset bytes. Run it on a controlled machine where the external dataset cannot be modified concurrently; preflight binds the run to the bytes observed at verification time.
 
 Run the deterministic no-biometric-data harness end to end:
 
@@ -90,6 +98,6 @@ uv run --locked --project services/face-ai face-ai-benchmark run \
   --max-frr 0.10
 ```
 
-The command reads `FACE_AI_INSIGHTFACE_*`, `FACE_AI_ONNX_PROVIDER`, and `FACE_AI_QDRANT_URL` from the environment. Before initializing model sessions, creating Qdrant collections, or reading dataset images, it hashes the canonical local SCRFD and ArcFace artifacts and requires an exact match with the manifest. It then creates a temporary deterministic cosine collection and always attempts teardown after runner startup. Errors are sanitized. Unit tests prove composition only; they are not real accuracy, threshold, latency, or throughput evidence.
+The command reads `FACE_AI_INSIGHTFACE_*`, `FACE_AI_ONNX_PROVIDER`, and `FACE_AI_QDRANT_URL` from the environment. It first streams and verifies every manifest image against its entry checksum. Only after the complete dataset preflight succeeds does it verify the canonical local SCRFD and ArcFace artifact hashes, initialize model sessions, and construct the Qdrant index. It then creates a temporary deterministic cosine collection and always attempts teardown after runner startup. Errors are sanitized. Unit tests prove composition only; they are not real accuracy, threshold, latency, or throughput evidence.
 
 The current runner is dependency-injected and unit-tested with synthetic inputs. A real report and threshold recommendation remain pending the authorized frozen dataset, exact local model checksums, successful CPU smoke run, and reachable benchmark Qdrant. Phase 2 must not start until that real report is reviewed and explicitly approved.

@@ -23,19 +23,22 @@
       "image_id": "image-enrollment-001",
       "subject_id": "subject-001",
       "path": "enrollment/image-001.jpg",
-      "role": "enrollment"
+      "role": "enrollment",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     },
     {
       "image_id": "image-query-001",
       "subject_id": "subject-001",
       "path": "queries/image-001.jpg",
-      "role": "query"
+      "role": "query",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     },
     {
       "image_id": "image-query-impostor-001",
       "subject_id": null,
       "path": "queries/impostor-001.jpg",
-      "role": "query"
+      "role": "query",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     }
   ]
 }

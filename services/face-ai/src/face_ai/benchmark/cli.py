@@ -23,6 +23,7 @@ from face_ai.vector_store import VectorCollection, VectorDistance, VectorIndex
 
 @dataclass(frozen=True, slots=True)
 class RunDependencies:
+    verify_dataset: Callable[[BenchmarkManifest, Path], None]
     verify_model: Callable[[BenchmarkManifest], None]
     get_pipeline: Callable[[], FacePipeline | Any | None]
     create_index: Callable[[BenchmarkManifest], VectorIndex | Any]
@@ -77,6 +78,7 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
             max_frr=args.max_frr,
         )
         manifest = BenchmarkManifest.load(args.manifest)
+        dependencies.verify_dataset(manifest, args.dataset_root)
         dependencies.verify_model(manifest)
         pipeline = dependencies.get_pipeline()
         if pipeline is None:
@@ -123,6 +125,7 @@ def _production_dependencies() -> RunDependencies:
         )
 
     return RunDependencies(
+        verify_dataset=lambda manifest, root: manifest.verify_dataset(root),
         verify_model=verify_model,
         get_pipeline=get_pipeline,
         create_index=create_index,
@@ -134,8 +137,7 @@ def _production_dependencies() -> RunDependencies:
 def _validate(manifest_path: Path, dataset_root: Path) -> int:
     try:
         manifest = BenchmarkManifest.load(manifest_path)
-        for entry in manifest.entries:
-            manifest.resolve_image(dataset_root, entry)
+        manifest.verify_dataset(dataset_root)
     except (ManifestError, OSError):
         print("benchmark validation failed", file=sys.stderr)
         return 2

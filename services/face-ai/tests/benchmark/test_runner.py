@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+
 from face_ai.benchmark.manifest import BenchmarkManifest
 from face_ai.benchmark.runner import BenchmarkRunner
 from face_ai.domain import (
@@ -45,10 +46,10 @@ def manifest() -> BenchmarkManifest:
         "model": {"id": "model-v1", "approval": "approved_non_commercial_poc", "detector_sha256": "a" * 64, "embedder_sha256": "b" * 64},
         "search": {"limit": 10, "thresholds": [0.5], "top_k": [1]},
         "entries": [
-            {"image_id": "img-001", "subject_id": "subject-1", "path": "enroll/a.png", "role": "enrollment"},
-            {"image_id": "img-002", "subject_id": "subject-1", "path": "query/b.png", "role": "query"},
-            {"image_id": "img-003", "subject_id": None, "path": "query/c.png", "role": "query"},
-            {"image_id": "img-004", "subject_id": "subject-1", "path": "query/d.png", "role": "query"},
+            {"image_id": "img-001", "subject_id": "subject-1", "path": "enroll/a.png", "role": "enrollment", "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"},
+            {"image_id": "img-002", "subject_id": "subject-1", "path": "query/b.png", "role": "query", "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"},
+            {"image_id": "img-003", "subject_id": None, "path": "query/c.png", "role": "query", "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"},
+            {"image_id": "img-004", "subject_id": "subject-1", "path": "query/d.png", "role": "query", "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"},
         ],
     })
 

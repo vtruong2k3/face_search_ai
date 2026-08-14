@@ -24,7 +24,13 @@ The manifest defines immutable roles:
 - `enrollment`: event photos that are indexed.
 - `query`: authorized selfies used to evaluate retrieval.
 
-A file may not appear in both roles. The benchmark runner must reject duplicate relative paths, duplicate image IDs, and a subject/image split that violates the frozen evaluation protocol. Changes to the split create a new dataset version and invalidate direct comparison with earlier reports.
+A file may not appear in both roles. Every entry also records the SHA-256 of its exact bytes. A dataset version is a human-readable label, not cryptographic freezing; changing any file requires a new checksum and changes the canonical manifest fingerprint. The benchmark runner must reject duplicate relative paths, duplicate image IDs, checksum mismatches, and a subject/image split that violates the frozen evaluation protocol. Changes to the split create a new dataset version and invalidate direct comparison with earlier reports.
+
+Calculate checksums on the controlled local machine without copying image data into Git:
+
+```bash
+sha256sum /external/authorized-dataset/enrollment/image-001.jpg
+```
 
 ## Local-only paths
 
@@ -89,13 +95,15 @@ The executable manifest format is strict JSON; see `services/face-ai/config/benc
 
 Threshold calibration operates offline over one frozen result set. A recommendation must satisfy explicit maximum FAR, optional maximum FRR, and minimum recall limits; otherwise the report states `no_feasible_threshold`. Reports contain aggregates and reproducibility fingerprints only by default. Real metric values are not available until the external authorized dataset and model artifacts are configured.
 
-The offline CLI can validate all manifest paths without initializing InsightFace or Qdrant:
+The offline CLI preflight-resolves every manifest path and streams every listed file's SHA-256 without initializing InsightFace or Qdrant:
 
 ```bash
 uv run --locked --project services/face-ai face-ai-benchmark validate \
   --manifest /external/benchmark.json \
   --dataset-root /external/authorized-dataset
 ```
+
+Preflight retains no dataset bytes and binds the run to the bytes observed at verification time. Use a controlled machine and least-privilege access so another process cannot mutate the external dataset between preflight and execution. For `run`, complete dataset verification occurs before model artifact verification, model initialization, Qdrant construction, inference, or report creation.
 
 `face-ai-benchmark synthetic --output benchmark-results/synthetic.json` exercises fixed observations, metrics, calibration, canonical reporting, stage timing aggregation, and serial throughput without biometric data. Passing this command verifies the harness only; its deterministic timing values are not evidence for real model accuracy, threshold suitability, or CPU performance.
 
@@ -134,7 +142,7 @@ Model:
 Execution:
 
 - [ ] Dataset root is outside the repository.
-- [ ] Manifest uses opaque IDs and relative paths only.
+- [ ] Manifest uses opaque IDs, relative paths, and per-entry SHA-256 checksums only.
 - [ ] Sensitive outputs are ignored by Git and excluded from logs.
 - [ ] Benchmark collection and cleanup procedure are configured.
 
