@@ -20,6 +20,7 @@ Last updated: 2026-08-14
   - [x] Privacy-safe deterministic aggregate report writer
   - [x] Synthetic unit verification with mathematically known results
   - [x] Executable offline validation and synthetic benchmark CLI
+  - [x] Executable real-benchmark composition path unit-verified
   - [x] Locked environment includes and imports InsightFace
   - [ ] Real authorized dataset and Qdrant benchmark run
 - [ ] Task 1.6: Calibrate threshold and report decision

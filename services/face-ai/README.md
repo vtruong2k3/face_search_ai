@@ -77,4 +77,18 @@ uv run --locked --project services/face-ai face-ai-benchmark synthetic \
 
 The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output. It does not demonstrate real model quality or CPU performance.
 
+After the external model pack, exact artifact checksums, authorized frozen dataset, and Qdrant are configured, execute the composed real benchmark path with an explicit calibration policy:
+
+```bash
+uv run --locked --project services/face-ai face-ai-benchmark run \
+  --manifest /external/benchmark.json \
+  --dataset-root /external/authorized-dataset \
+  --output benchmark-results/real.json \
+  --max-far 0.01 \
+  --min-recall 0.90 \
+  --max-frr 0.10
+```
+
+The command reads `FACE_AI_INSIGHTFACE_*`, `FACE_AI_ONNX_PROVIDER`, and `FACE_AI_QDRANT_URL` from the environment, creates a temporary deterministic cosine collection, and always attempts teardown after runner startup. Errors are sanitized. Unit tests prove composition only; they are not real accuracy, threshold, latency, or throughput evidence.
+
 The current runner is dependency-injected and unit-tested with synthetic inputs. A real report and threshold recommendation remain pending the authorized frozen dataset, exact local model checksums, successful CPU smoke run, and reachable benchmark Qdrant. Phase 2 must not start until that real report is reviewed and explicitly approved.

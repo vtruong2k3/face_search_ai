@@ -97,6 +97,20 @@ uv run --locked --project services/face-ai face-ai-benchmark validate \
 
 `face-ai-benchmark synthetic --output benchmark-results/synthetic.json` exercises fixed observations, metrics, calibration, and canonical reporting without biometric data. Passing this command verifies the harness only; it is not evidence for real model accuracy, threshold suitability, or CPU performance.
 
+Once every approval checklist item is complete and the external `buffalo_l` pack, exact checksums, frozen dataset, and Qdrant are configured, the composed real-run path is:
+
+```bash
+uv run --locked --project services/face-ai face-ai-benchmark run \
+  --manifest /external/benchmark.json \
+  --dataset-root /external/authorized-dataset \
+  --output benchmark-results/real.json \
+  --max-far 0.01 \
+  --min-recall 0.90 \
+  --max-frr 0.10
+```
+
+Calibration policy rates are explicit and must be between zero and one; `--max-frr` is optional. Threshold candidates remain frozen in the manifest rather than hidden in the command. Runtime settings come from the existing `FACE_AI_*` environment. The command emits sanitized status text and aggregate reports only. Its offline tests verify orchestration and cleanup, not real quality or CPU performance.
+
 ## Approval checklist
 
 Dataset:

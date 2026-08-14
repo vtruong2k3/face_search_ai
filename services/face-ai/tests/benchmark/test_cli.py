@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
-from face_ai.benchmark.cli import main
+from face_ai.benchmark.cli import RunDependencies, main
 
 
 def manifest_value() -> dict[str, object]:
@@ -55,3 +56,85 @@ def test_validate_command_sanitizes_manifest_errors(tmp_path: Path, capsys: obje
     error = capsys.readouterr().err  # type: ignore[attr-defined]
     assert error == "benchmark validation failed\n"
     assert str(manifest) not in error
+
+
+def test_run_command_passes_explicit_policy_to_injected_executor(
+    tmp_path: Path, capsys: object
+) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
+    captured: dict[str, Any] = {}
+    pipeline = object()
+    index = object()
+
+    def execute(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"status": "recommended"}
+
+    dependencies = RunDependencies(
+        get_pipeline=lambda: pipeline,
+        create_index=lambda loaded: index,
+        execute=execute,
+        clock_ms=lambda: 0.0,
+    )
+    output = tmp_path / "benchmark-results" / "run.json"
+
+    exit_code = main(
+        [
+            "run",
+            "--manifest",
+            str(manifest),
+            "--dataset-root",
+            str(tmp_path),
+            "--output",
+            str(output),
+            "--max-far",
+            "0.01",
+            "--min-recall",
+            "0.9",
+            "--max-frr",
+            "0.2",
+        ],
+        run_dependencies=dependencies,
+    )
+
+    assert exit_code == 0
+    assert captured["pipeline"] is pipeline
+    assert captured["index"] is index
+    assert captured["policy"].max_far == 0.01
+    assert captured["policy"].min_recall == 0.9
+    assert captured["policy"].max_frr == 0.2
+    assert capsys.readouterr().out == "benchmark run completed\n"  # type: ignore[attr-defined]
+
+
+def test_run_command_sanitizes_unavailable_pipeline(tmp_path: Path, capsys: object) -> None:
+    manifest = tmp_path / "private-manifest.json"
+    manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
+    dependencies = RunDependencies(
+        get_pipeline=lambda: None,
+        create_index=lambda loaded: (_ for _ in ()).throw(AssertionError("must not create index")),
+        execute=lambda **kwargs: {},
+        clock_ms=lambda: 0.0,
+    )
+
+    exit_code = main(
+        [
+            "run",
+            "--manifest",
+            str(manifest),
+            "--dataset-root",
+            str(tmp_path / "private-dataset"),
+            "--output",
+            str(tmp_path / "benchmark-results" / "run.json"),
+            "--max-far",
+            "0.01",
+            "--min-recall",
+            "0.9",
+        ],
+        run_dependencies=dependencies,
+    )
+
+    assert exit_code == 2
+    error = capsys.readouterr().err  # type: ignore[attr-defined]
+    assert error == "benchmark run failed\n"
+    assert str(tmp_path) not in error
