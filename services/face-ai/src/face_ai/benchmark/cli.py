@@ -13,6 +13,7 @@ from qdrant_client import QdrantClient
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestError
+from face_ai.benchmark.runtime_metadata import RuntimeMetadata, collect_runtime_metadata
 from face_ai.benchmark.synthetic import run_synthetic
 from face_ai.pipeline import FacePipeline
 from face_ai.qdrant_store import BenchmarkQdrantIndex, QdrantClientPort
@@ -25,6 +26,7 @@ from face_ai.vector_store import VectorCollection, VectorDistance, VectorIndex
 class RunDependencies:
     verify_dataset: Callable[[BenchmarkManifest, Path], None]
     verify_model: Callable[[BenchmarkManifest], None]
+    get_runtime_metadata: Callable[[], RuntimeMetadata]
     get_pipeline: Callable[[], FacePipeline | Any | None]
     create_index: Callable[[BenchmarkManifest], VectorIndex | Any]
     execute: Callable[..., dict[str, Any]]
@@ -80,6 +82,7 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
         manifest = BenchmarkManifest.load(args.manifest)
         dependencies.verify_dataset(manifest, args.dataset_root)
         dependencies.verify_model(manifest)
+        runtime_metadata = dependencies.get_runtime_metadata()
         pipeline = dependencies.get_pipeline()
         if pipeline is None:
             raise RuntimeError("pipeline is unavailable")
@@ -92,6 +95,7 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
             index=index,
             clock_ms=dependencies.clock_ms,
             policy=policy,
+            runtime_metadata=runtime_metadata,
         )
     except Exception:  # noqa: BLE001 -- CLI must sanitize external/model/storage failures
         print("benchmark run failed", file=sys.stderr)
@@ -127,6 +131,7 @@ def _production_dependencies() -> RunDependencies:
     return RunDependencies(
         verify_dataset=lambda manifest, root: manifest.verify_dataset(root),
         verify_model=verify_model,
+        get_runtime_metadata=lambda: collect_runtime_metadata(settings),
         get_pipeline=get_pipeline,
         create_index=create_index,
         execute=execute_benchmark,

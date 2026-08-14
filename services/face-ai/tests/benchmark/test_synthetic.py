@@ -22,6 +22,8 @@ def test_synthetic_benchmark_writes_expected_aggregate_report(tmp_path: Path) ->
     assert report["metrics"]["fp"] == 0
     assert report["performance"]["vector_search_count"] == 3
     assert report["performance"]["queries_per_second"] == 40.0
+    assert report["reproducibility"]["runtime"]["execution_policy"] == "serial"
+    assert report["reproducibility"]["runtime"]["operating_system"] == "synthetic"
     assert "subject-" not in content
     assert "query-" not in content
     assert str(tmp_path) not in content

@@ -13,6 +13,26 @@ from face_ai.benchmark.metrics import (
     calculate_metrics,
 )
 from face_ai.benchmark.report import write_report
+from face_ai.benchmark.runtime_metadata import RuntimeMetadata
+
+_SYNTHETIC_RUNTIME = RuntimeMetadata(
+    operating_system="synthetic",
+    architecture="synthetic",
+    logical_cpu_count=1,
+    python_version="synthetic",
+    onnx_provider="synthetic",
+    onnxruntime_version="synthetic",
+    insightface_version="synthetic",
+    numpy_version="synthetic",
+    opencv_version="synthetic",
+    pillow_version="synthetic",
+    qdrant_client_version="synthetic",
+    insightface_pack="synthetic",
+    detection_width=1,
+    detection_height=1,
+    detection_threshold=0.5,
+    execution_policy="serial",
+)
 
 
 def _timings(end_to_end_ms: float, *, searched: bool = True) -> QueryTimings:
@@ -55,7 +75,11 @@ def run_synthetic(output: Path) -> dict[str, Any]:
             "points": [asdict(point) for point in calibration.points],
         },
         "status": calibration.status,
-        "reproducibility": {"fixture": "synthetic-v1", "volatile_fields": []},
+        "reproducibility": {
+            "fixture": "synthetic-v1",
+            "runtime": asdict(_SYNTHETIC_RUNTIME),
+            "volatile_fields": [],
+        },
     }
     write_report(output, report)
     return report

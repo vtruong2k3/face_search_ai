@@ -67,6 +67,8 @@ sha256sum /external/authorized-dataset/enrollment/image-001.jpg
 
 The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, and linear-interpolated latency percentiles. Performance output aggregates decode/validation, detection, per-image alignment and embedding totals, conditional vector search, and end-to-end query timing, plus serial queries per second. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, raw timing samples, or per-query identity observations.
 
+Real-run reports also include a strict sanitized runtime descriptor: OS family, architecture, logical CPU count, Python and relevant library versions, configured ONNX provider, InsightFace pack and detection settings, and the serial execution policy. Collection reads configuration and package/platform metadata only; it does not initialize models, access dataset files, or contact Qdrant. It intentionally excludes hostnames, usernames, paths, URLs, environment dumps, and hardware serial identifiers. Logical CPU count is neither physical-core count nor CPU utilization, and this descriptor is reproducibility context—not real performance evidence.
+
 After `uv sync --locked --project services/face-ai`, validate a frozen manifest without initializing models or Qdrant:
 
 ```bash

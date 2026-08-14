@@ -9,6 +9,7 @@ import pytest
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest
+from face_ai.benchmark.runtime_metadata import RuntimeMetadata
 from face_ai.domain import (
     BoundingBox,
     DetectedFace,
@@ -18,6 +19,11 @@ from face_ai.domain import (
 )
 from face_ai.pipeline import PipelineResult, PipelineTimings
 from face_ai.validation import ValidatedImage
+
+_RUNTIME_METADATA = RuntimeMetadata(
+    "TestOS", "test-arch", 4, "3.11.0", "CPUExecutionProvider", "1", "2",
+    "3", "4", "5", "6", "buffalo_l", 640, 640, 0.5, "serial"
+)
 
 _FACE = DetectedFace(
     BoundingBox(0, 0, 2, 2),
@@ -114,6 +120,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
         index=index,
         clock_ms=clock,
         policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
+        runtime_metadata=_RUNTIME_METADATA,
     )
 
     assert index.torn_down is True
@@ -122,6 +129,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     assert report["calibration"]["recommended_threshold"] == 0.5
     assert [point["threshold"] for point in report["metrics"]] == [0.5, 0.95]
     assert report["reproducibility"]["seed"] == 7
+    assert report["reproducibility"]["runtime"]["architecture"] == "test-arch"
     serialized = output.read_text(encoding="utf-8")
     assert str(dataset_root) not in serialized
     assert "query-1" not in serialized
@@ -149,6 +157,7 @@ def test_execute_benchmark_does_not_write_report_after_runner_failure(tmp_path: 
             index=index,
             clock_ms=lambda: 0.0,
             policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
+        runtime_metadata=_RUNTIME_METADATA,
         )
 
     assert index.torn_down is True

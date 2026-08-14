@@ -11,6 +11,7 @@ from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
 from face_ai.benchmark.metrics import aggregate_performance, calculate_metrics
 from face_ai.benchmark.report import write_report
 from face_ai.benchmark.runner import BenchmarkRunner, PipelinePort
+from face_ai.benchmark.runtime_metadata import RuntimeMetadata
 from face_ai.vector_store import VectorIndex
 
 
@@ -23,6 +24,7 @@ def execute_benchmark(
     index: VectorIndex,
     clock_ms: Callable[[], float],
     policy: CalibrationPolicy,
+    runtime_metadata: RuntimeMetadata,
 ) -> dict[str, Any]:
     def load_bytes(entry: ManifestEntry) -> bytes:
         return manifest.resolve_image(dataset_root, entry).read_bytes()
@@ -70,6 +72,7 @@ def execute_benchmark(
             "thresholds": list(manifest.search.thresholds),
             "top_k": list(manifest.search.top_k),
             "policy": asdict(policy),
+            "runtime": asdict(runtime_metadata),
         },
     }
     write_report(output, report)

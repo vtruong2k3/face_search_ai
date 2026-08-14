@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from face_ai.benchmark.cli import RunDependencies, main
+from face_ai.benchmark.runtime_metadata import RuntimeMetadata
+
+_RUNTIME_METADATA = RuntimeMetadata(
+    "TestOS", "test-arch", 4, "3.11.0", "CPUExecutionProvider", "1", "2",
+    "3", "4", "5", "6", "buffalo_l", 640, 640, 0.5, "serial"
+)
 
 
 def manifest_value() -> dict[str, object]:
@@ -87,6 +93,7 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
     dependencies = RunDependencies(
         verify_dataset=lambda loaded, root: None,
         verify_model=lambda loaded: None,
+        get_runtime_metadata=lambda: _RUNTIME_METADATA,
         get_pipeline=lambda: pipeline,
         create_index=lambda loaded: index,
         execute=execute,
@@ -136,6 +143,7 @@ def test_run_command_rejects_dataset_before_model_pipeline_and_index(
     dependencies = RunDependencies(
         verify_dataset=reject_dataset,
         verify_model=lambda loaded: events.append("model"),
+        get_runtime_metadata=lambda: events.append("metadata") or _RUNTIME_METADATA,
         get_pipeline=lambda: events.append("pipeline"),
         create_index=lambda loaded: events.append("index"),
         execute=lambda **kwargs: events.append("execute") or {},
@@ -180,6 +188,7 @@ def test_run_command_verifies_model_before_pipeline_and_index(
     dependencies = RunDependencies(
         verify_dataset=lambda loaded, root: None,
         verify_model=reject_model,
+        get_runtime_metadata=lambda: events.append("metadata") or _RUNTIME_METADATA,
         get_pipeline=lambda: events.append("pipeline"),
         create_index=lambda loaded: events.append("index"),
         execute=lambda **kwargs: events.append("execute") or {},
@@ -210,12 +219,50 @@ def test_run_command_verifies_model_before_pipeline_and_index(
     assert str(tmp_path) not in error
 
 
-def test_run_command_sanitizes_unavailable_pipeline(tmp_path: Path, capsys: object) -> None:
+def test_run_command_sanitizes_runtime_metadata_failure_before_pipeline(
+    tmp_path: Path, capsys: object
+) -> None:
+    manifest = tmp_path / "private-manifest.json"
+    manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
+    events: list[str] = []
+
+    def reject_metadata() -> RuntimeMetadata:
+        events.append("metadata")
+        raise RuntimeError(f"private runtime at {tmp_path}")
+
+    dependencies = RunDependencies(
+        verify_dataset=lambda loaded, root: events.append("dataset"),
+        verify_model=lambda loaded: events.append("model"),
+        get_runtime_metadata=reject_metadata,
+        get_pipeline=lambda: events.append("pipeline"),
+        create_index=lambda loaded: events.append("index"),
+        execute=lambda **kwargs: events.append("execute") or {},
+        clock_ms=lambda: 0.0,
+    )
+
+    exit_code = main(
+        [
+            "run", "--manifest", str(manifest), "--dataset-root", str(tmp_path),
+            "--output", str(tmp_path / "benchmark-results" / "run.json"),
+            "--max-far", "0.01", "--min-recall", "0.9",
+        ],
+        run_dependencies=dependencies,
+    )
+
+    assert exit_code == 2
+    assert events == ["dataset", "model", "metadata"]
+    assert capsys.readouterr().err == "benchmark run failed\n"  # type: ignore[attr-defined]
+
+
+def test_run_command_sanitizes_unavailable_pipeline(
+    tmp_path: Path, capsys: object
+) -> None:
     manifest = tmp_path / "private-manifest.json"
     manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
     dependencies = RunDependencies(
         verify_dataset=lambda loaded, root: None,
         verify_model=lambda loaded: None,
+        get_runtime_metadata=lambda: _RUNTIME_METADATA,
         get_pipeline=lambda: None,
         create_index=lambda loaded: (_ for _ in ()).throw(AssertionError("must not create index")),
         execute=lambda **kwargs: {},

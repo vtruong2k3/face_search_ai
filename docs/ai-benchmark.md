@@ -92,6 +92,9 @@ The executable manifest format is strict JSON; see `services/face-ai/config/benc
 - p50/p90/p95/p99 use linear interpolation over sorted non-negative latency samples.
 - Performance stages are decode/validation, detection, alignment, embedding, vector search, and end-to-end query latency. Alignment and embedding are per-image totals across all detected faces; vector-search percentiles include only queries that searched.
 - Serial queries per second is query count divided by summed end-to-end query duration. It excludes initialization, enrollment/upsert, collection lifecycle, teardown, and concurrent service capacity.
+- Real-run reproducibility metadata is restricted to OS family, architecture, logical CPU count, Python/library versions, ONNX provider, InsightFace pack/detection settings, and the serial execution policy. It excludes machine identity, paths, URLs, environment values, and hardware serial data.
+
+The runtime descriptor is collected without model initialization, dataset reads, or Qdrant access. Logical CPU count does not identify physical cores or CPU utilization, and metadata alone is not a CPU benchmark result. Real latency and throughput remain unavailable until the controlled authorized run.
 
 Threshold calibration operates offline over one frozen result set. A recommendation must satisfy explicit maximum FAR, optional maximum FRR, and minimum recall limits; otherwise the report states `no_feasible_threshold`. Reports contain aggregates and reproducibility fingerprints only by default. Real metric values are not available until the external authorized dataset and model artifacts are configured.
 
