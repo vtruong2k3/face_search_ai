@@ -138,6 +138,60 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     assert json.loads(serialized) == report
 
 
+def test_execute_benchmark_repeats_identical_logical_and_canonical_results(
+    tmp_path: Path,
+) -> None:
+    dataset_root = tmp_path / "authorized"
+    (dataset_root / "enrollment").mkdir(parents=True)
+    (dataset_root / "queries").mkdir()
+    (dataset_root / "enrollment" / "a.png").write_bytes(b"1")
+    (dataset_root / "queries" / "b.png").write_bytes(b"1")
+    (dataset_root / "queries" / "c.png").write_bytes(b"0")
+    outputs = (
+        tmp_path / "benchmark-results" / "first.json",
+        tmp_path / "benchmark-results" / "second.json",
+    )
+    reports: list[dict[str, object]] = []
+
+    for output in outputs:
+        index = FakeIndex()
+        reports.append(
+            execute_benchmark(
+                manifest=manifest(),
+                dataset_root=dataset_root,
+                output=output,
+                pipeline=FakePipeline(),
+                index=index,
+                clock_ms=iter(
+                    (0.0, 10.0, 15.0, 20.0, 30.0, 40.0)
+                ).__next__,
+                policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
+                runtime_metadata=_RUNTIME_METADATA,
+            )
+        )
+        assert index.torn_down is True
+
+    assert reports[0] == reports[1]
+    assert outputs[0].read_bytes() == outputs[1].read_bytes()
+    assert reports[0]["query_count"] == 2
+    assert reports[0]["enrollment_failures"] == 0
+    assert reports[0]["calibration"] == reports[1]["calibration"]
+    assert reports[0]["performance"] == reports[1]["performance"]
+    assert reports[0]["reproducibility"] == reports[1]["reproducibility"]
+
+    serialized = outputs[0].read_text(encoding="utf-8")
+    for private_value in (
+        str(dataset_root),
+        "query-1",
+        "query-2",
+        "subject-1",
+        "enrollment/a.png",
+        "queries/b.png",
+        "raw_timings",
+    ):
+        assert private_value not in serialized
+
+
 def test_execute_benchmark_does_not_write_report_after_runner_failure(tmp_path: Path) -> None:
     dataset_root = tmp_path / "authorized"
     (dataset_root / "enrollment").mkdir(parents=True)
@@ -157,7 +211,7 @@ def test_execute_benchmark_does_not_write_report_after_runner_failure(tmp_path: 
             index=index,
             clock_ms=lambda: 0.0,
             policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
-        runtime_metadata=_RUNTIME_METADATA,
+            runtime_metadata=_RUNTIME_METADATA,
         )
 
     assert index.torn_down is True
