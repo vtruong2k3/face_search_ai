@@ -12,7 +12,7 @@ Last updated: 2026-08-14
 
 - [x] Task 1.1: Define stable AI domain interfaces
 - [x] Task 1.2: Add model lifecycle and ONNX provider selection
-- [x] Task 1.3: Implement detection, alignment, and embedding (personal non-commercial buffalo_l PoC; real CPU smoke pending local pack/image)
+- [x] Task 1.3: Implement detection, alignment, and embedding (personal non-commercial buffalo_l PoC; cached runtime/readiness integration unit-verified; real CPU smoke pending local pack/image)
 - [x] Task 1.4: Add benchmark Qdrant adapter (unit-verified; Compose integration pending reachable Qdrant)
 - [ ] Task 1.5: Build reproducible benchmark runner
   - [x] Strict JSON manifest validation and stable fingerprints

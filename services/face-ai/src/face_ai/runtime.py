@@ -12,11 +12,23 @@ import numpy
 import onnxruntime  # type: ignore[import-untyped]
 from PIL import Image
 
+from face_ai.models.insightface import InsightFaceAdapters, prepare_buffalo_l
+from face_ai.pipeline import FacePipeline
 from face_ai.settings import Settings
 
 
 class SessionFactory(Protocol):
     def __call__(self, path: str, *, providers: list[str]) -> Any: ...
+
+
+class InsightFacePrepare(Protocol):
+    def __call__(
+        self,
+        *,
+        model_root: Path,
+        detection_size: tuple[int, int],
+        detection_threshold: float,
+    ) -> InsightFaceAdapters: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +170,120 @@ def _sha256(path: Path) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class InsightFacePipelineKey:
+    enabled: bool
+    model_root: Path | None
+    pack: str
+    onnx_provider: str
+    detection_width: int
+    detection_height: int
+    detection_threshold: float
+
+
+class InsightFacePipelineRuntime:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        prepare: InsightFacePrepare = prepare_buffalo_l,
+    ) -> None:
+        self._settings = settings
+        self._prepare = prepare
+        self._pipeline: FacePipeline | None = None
+        self._initialized = False
+        self._state = self._initial_state()
+
+    def pipeline(self) -> FacePipeline | None:
+        if self._state in {"disabled", "not_configured", "unsupported_provider"}:
+            return None
+        if self._initialized:
+            return self._pipeline
+
+        self._initialized = True
+        model_root = self._settings.insightface_model_root
+        if model_root is None:
+            self._state = "not_configured"
+            return None
+        try:
+            adapters = self._prepare(
+                model_root=model_root,
+                detection_size=(
+                    self._settings.insightface_detection_width,
+                    self._settings.insightface_detection_height,
+                ),
+                detection_threshold=self._settings.insightface_detection_threshold,
+            )
+            self._pipeline = FacePipeline(
+                detector=adapters.detector,
+                aligner=adapters.aligner,
+                embedder=adapters.embedder,
+            )
+        except Exception:  # noqa: BLE001 -- third-party initialization must become safe readiness
+            self._state = "load_failed"
+            return None
+
+        self._state = "ready"
+        return self._pipeline
+
+    def status(self) -> dict[str, object]:
+        self.pipeline()
+        ready = self._state in {"disabled", "ready"}
+        status: dict[str, object] = {
+            "enabled": self._settings.insightface_enabled,
+            "backend": "insightface",
+            "pack": self._settings.insightface_pack,
+            "state": self._state,
+            "ready": ready,
+        }
+        if self._state == "load_failed":
+            status["error"] = "pipeline initialization failed"
+        elif self._state == "unsupported_provider":
+            status["error"] = "pipeline provider is unsupported"
+        return status
+
+    def _initial_state(self) -> str:
+        if not self._settings.insightface_enabled:
+            return "disabled"
+        if self._settings.insightface_model_root is None:
+            return "not_configured"
+        if self._settings.onnx_provider != "CPUExecutionProvider":
+            return "unsupported_provider"
+        return "configured"
+
+
+def _pipeline_key(settings: Settings) -> InsightFacePipelineKey:
+    return InsightFacePipelineKey(
+        enabled=settings.insightface_enabled,
+        model_root=settings.insightface_model_root,
+        pack=settings.insightface_pack,
+        onnx_provider=settings.onnx_provider,
+        detection_width=settings.insightface_detection_width,
+        detection_height=settings.insightface_detection_height,
+        detection_threshold=settings.insightface_detection_threshold,
+    )
+
+
+@lru_cache
+def _cached_insightface_pipeline_runtime(
+    settings_key: InsightFacePipelineKey,
+) -> InsightFacePipelineRuntime:
+    settings = Settings(
+        insightface_enabled=settings_key.enabled,
+        insightface_model_root=settings_key.model_root,
+        insightface_pack=settings_key.pack,
+        onnx_provider=settings_key.onnx_provider,
+        insightface_detection_width=settings_key.detection_width,
+        insightface_detection_height=settings_key.detection_height,
+        insightface_detection_threshold=settings_key.detection_threshold,
+    )
+    return InsightFacePipelineRuntime(settings=settings)
+
+
+def get_insightface_pipeline_runtime(settings: Settings) -> InsightFacePipelineRuntime:
+    return _cached_insightface_pipeline_runtime(_pipeline_key(settings))
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeKey:
     models_required: bool
     detector_model_path: Path | None
@@ -196,4 +322,8 @@ def get_model_runtime(settings: Settings) -> ModelRuntime:
 
 
 def runtime_status(settings: Settings) -> dict[str, object]:
-    return get_model_runtime(settings).status()
+    status = get_model_runtime(settings).status()
+    pipeline_status = get_insightface_pipeline_runtime(settings).status()
+    status["pipeline"] = pipeline_status
+    status["ready"] = bool(status["ready"]) and bool(pipeline_status["ready"])
+    return status

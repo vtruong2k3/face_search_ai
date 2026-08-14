@@ -22,7 +22,7 @@ export FACE_AI_INSIGHTFACE_PACK=buffalo_l
 export FACE_AI_ONNX_PROVIDER=CPUExecutionProvider
 ```
 
-The adapter verifies that `models/buffalo_l` exists before creating `FaceAnalysis`, so normal startup and tests do not implicitly download model weights.
+The adapter verifies that `models/buffalo_l` exists before creating `FaceAnalysis`, so normal startup and tests do not implicitly download model weights. InsightFace is disabled by default. When enabled, readiness initializes one cached pipeline per effective model configuration and returns `503 not_ready` if the external root, CPU provider, pack, or recognition model is unavailable. Health output uses sanitized states and never returns the model root or raw initialization error.
 
 Install dependencies from the locked project environment. When `uv` is available:
 

@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from face_ai.runtime import ModelArtifact, ModelRuntime, runtime_status
+from face_ai.models.insightface import InsightFaceAdapters
+from face_ai.pipeline import FacePipeline
+from face_ai.runtime import (
+    InsightFacePipelineRuntime,
+    ModelArtifact,
+    ModelRuntime,
+    runtime_status,
+)
 from face_ai.settings import Settings
 
 
@@ -156,11 +163,131 @@ def test_model_artifact_requires_valid_sha256() -> None:
         ModelArtifact(name="detector", path=Path("model.onnx"), expected_sha256="invalid")
 
 
-def test_runtime_status_keeps_health_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_insightface_pipeline_is_disabled_without_preparation() -> None:
+    def fail_prepare(**kwargs: Any) -> InsightFaceAdapters:
+        raise AssertionError("disabled pipeline must not be prepared")
+
+    runtime = InsightFacePipelineRuntime(
+        settings=Settings(_env_file=None),
+        prepare=fail_prepare,
+    )
+
+    assert runtime.pipeline() is None
+    assert runtime.status() == {
+        "enabled": False,
+        "backend": "insightface",
+        "pack": "buffalo_l",
+        "state": "disabled",
+        "ready": True,
+    }
+
+
+def test_insightface_pipeline_requires_external_root() -> None:
+    runtime = InsightFacePipelineRuntime(
+        settings=Settings(_env_file=None, insightface_enabled=True),
+    )
+
+    assert runtime.pipeline() is None
+    assert runtime.status()["state"] == "not_configured"
+    assert runtime.status()["ready"] is False
+
+
+def test_insightface_pipeline_prepares_once_and_sanitizes_failures(tmp_path: Path) -> None:
+    model_root = tmp_path / "private-model-root"
+    calls: list[dict[str, Any]] = []
+
+    class FakeDetector:
+        def detect(self, image: Any) -> list[Any]:
+            return []
+
+    class FakeAligner:
+        def align(self, image: Any, face: Any) -> Any:
+            return image
+
+    class FakeEmbedder:
+        dimension = 512
+
+        def embed(self, aligned_face: Any) -> Any:
+            return aligned_face
+
+    adapters = InsightFaceAdapters(
+        detector=FakeDetector(),  # type: ignore[arg-type]
+        aligner=FakeAligner(),  # type: ignore[arg-type]
+        embedder=FakeEmbedder(),  # type: ignore[arg-type]
+    )
+
+    def prepare(**kwargs: Any) -> InsightFaceAdapters:
+        calls.append(kwargs)
+        return adapters
+
+    settings = Settings(
+        _env_file=None,
+        insightface_enabled=True,
+        insightface_model_root=model_root,
+        insightface_detection_width=320,
+        insightface_detection_height=480,
+        insightface_detection_threshold=0.75,
+    )
+    runtime = InsightFacePipelineRuntime(settings=settings, prepare=prepare)
+
+    first = runtime.pipeline()
+    second = runtime.pipeline()
+
+    assert isinstance(first, FacePipeline)
+    assert second is first
+    assert calls == [
+        {
+            "model_root": model_root,
+            "detection_size": (320, 480),
+            "detection_threshold": 0.75,
+        }
+    ]
+    assert runtime.status()["state"] == "ready"
+
+    def fail_prepare(**kwargs: Any) -> InsightFaceAdapters:
+        raise RuntimeError(f"failed at {model_root}/models/buffalo_l/model.onnx")
+
+    failed = InsightFacePipelineRuntime(settings=settings, prepare=fail_prepare)
+    assert failed.pipeline() is None
+    failed_status = failed.status()
+    assert failed_status["state"] == "load_failed"
+    assert failed_status["error"] == "pipeline initialization failed"
+    assert str(model_root) not in repr(failed_status)
+
+
+def test_insightface_pipeline_rejects_non_cpu_provider_before_preparation(tmp_path: Path) -> None:
+    def fail_prepare(**kwargs: Any) -> InsightFaceAdapters:
+        raise AssertionError("unsupported provider must not prepare pipeline")
+
+    runtime = InsightFacePipelineRuntime(
+        settings=Settings(
+            _env_file=None,
+            insightface_enabled=True,
+            insightface_model_root=tmp_path,
+            onnx_provider="CUDAExecutionProvider",
+        ),
+        prepare=fail_prepare,
+    )
+
+    assert runtime.pipeline() is None
+    assert runtime.status()["state"] == "unsupported_provider"
+
+
+def test_runtime_status_combines_legacy_and_pipeline_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     class StubRuntime:
         def status(self) -> dict[str, Any]:
             return {"ready": True, "provider": "CPUExecutionProvider"}
 
-    monkeypatch.setattr("face_ai.runtime.get_model_runtime", lambda settings: StubRuntime())
+    class StubPipelineRuntime:
+        def status(self) -> dict[str, Any]:
+            return {"enabled": True, "state": "load_failed", "ready": False}
 
-    assert runtime_status(Settings(_env_file=None))["ready"] is True
+    monkeypatch.setattr("face_ai.runtime.get_model_runtime", lambda settings: StubRuntime())
+    monkeypatch.setattr(
+        "face_ai.runtime.get_insightface_pipeline_runtime",
+        lambda settings: StubPipelineRuntime(),
+    )
+
+    status = runtime_status(Settings(_env_file=None))
+    assert status["ready"] is False
+    assert status["pipeline"]["state"] == "load_failed"
