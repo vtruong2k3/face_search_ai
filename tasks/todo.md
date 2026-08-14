@@ -14,8 +14,8 @@ Last updated: 2026-08-14
 - [x] Task 1.2: Add model lifecycle and ONNX provider selection
 - [x] Task 1.3: Implement detection, alignment, and embedding (personal non-commercial buffalo_l PoC; real CPU smoke pending local pack/image)
 - [x] Task 1.4: Add benchmark Qdrant adapter (unit-verified; Compose integration pending reachable Qdrant)
-- [ ] Task 1.5: Build reproducible benchmark runner
-- [ ] Task 1.6: Calibrate threshold and report decision
+- [ ] Task 1.5: Build reproducible benchmark runner (synthetic core/unit verification complete; real authorized dataset/Qdrant run pending)
+- [ ] Task 1.6: Calibrate threshold and report decision (deterministic sweep/unit verification complete; real recommendation pending)
 - [ ] Checkpoint 1: User approves AI quality gate
 
 ## Phase 2 — MVP platform foundation

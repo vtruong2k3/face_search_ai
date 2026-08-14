@@ -72,6 +72,21 @@ The implementation expects the pack at an external root under `models/buffalo_l`
 - Record seed, manifest version, model checksum, preprocessing version, threshold sweep, and hardware class for reproducibility.
 - Delete dataset access, temporary files, benchmark vectors, and sensitive outputs at the approved retention deadline.
 
+## Frozen metric protocol
+
+The executable manifest format is strict JSON; see `services/face-ai/config/benchmark.example.json`. One query is either a known-subject match query or an impostor query with a null expected subject. Rankings are deduplicated by opaque subject ID, retaining the highest score with deterministic tie ordering. A score is accepted when `score >= threshold`.
+
+- Top-K is measured over known-subject queries and is independent of the acceptance threshold.
+- TP is an accepted top-1 expected subject.
+- FP is an accepted impostor result or an accepted wrong subject for a known query.
+- FN is a known query without an accepted correct top-1 result.
+- TN is an impostor query without an accepted result.
+- Undefined zero-denominator rates are reported as null, not zero.
+- No-face and ambiguous multi-face query rates use all query entries.
+- p50/p90/p95/p99 use linear interpolation over sorted non-negative latency samples.
+
+Threshold calibration operates offline over one frozen result set. A recommendation must satisfy explicit maximum FAR, optional maximum FRR, and minimum recall limits; otherwise the report states `no_feasible_threshold`. Reports contain aggregates and reproducibility fingerprints only by default. Real metric values are not available until the external authorized dataset and model artifacts are configured.
+
 ## Approval checklist
 
 Dataset:

@@ -1,0 +1,41 @@
+{
+  "benchmark_id": "poc-v1",
+  "mode": "personal_non_commercial_poc",
+  "seed": 20260814,
+  "dataset": {
+    "id": "authorized-poc-v1",
+    "version": "replace-with-frozen-version",
+    "event_id": "event-poc-v1"
+  },
+  "model": {
+    "id": "insightface-buffalo-l-local",
+    "approval": "approved_non_commercial_poc",
+    "detector_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "embedder_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "search": {
+    "limit": 100,
+    "thresholds": [0.3, 0.4, 0.5, 0.6, 0.7],
+    "top_k": [1, 5, 10]
+  },
+  "entries": [
+    {
+      "image_id": "image-enrollment-001",
+      "subject_id": "subject-001",
+      "path": "enrollment/image-001.jpg",
+      "role": "enrollment"
+    },
+    {
+      "image_id": "image-query-001",
+      "subject_id": "subject-001",
+      "path": "queries/image-001.jpg",
+      "role": "query"
+    },
+    {
+      "image_id": "image-query-impostor-001",
+      "subject_id": null,
+      "path": "queries/impostor-001.jpg",
+      "role": "query"
+    }
+  ]
+}

@@ -1,5 +1,8 @@
-# Copy this file to an ignored local configuration before adding real values.
-# The benchmark runner will refuse to start until both approvals are `approved`.
+# Documentation-only governance template. The executable benchmark manifest is
+# benchmark.example.json and uses strict JSON without additional dependencies.
+# Copy either file to an ignored local configuration before adding real values.
+# A personal non-commercial run permits the recorded dataset approval plus
+# `approved_non_commercial_poc`; commercial evaluation requires `approved`.
 
 benchmark:
   id: "poc-v1"

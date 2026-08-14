@@ -53,3 +53,11 @@ services/face-ai/.venv/bin/mypy services/face-ai/src
 ```
 
 Before a real benchmark, record the SHA-256 of every local ONNX artifact and use only an authorized image dataset. A real CPU smoke run remains pending until both the external model pack and an authorized image are configured.
+
+## Reproducible benchmark core
+
+`config/benchmark.example.json` is the executable strict-JSON manifest example. It records frozen dataset/model identifiers, SHA-256 checksums, relative enrollment/query paths, search limits, and threshold candidates. The validator rejects unknown fields, duplicate IDs or paths, absolute/traversing paths, symlink escapes, malformed checksums, and use of `approved_non_commercial_poc` outside `personal_non_commercial_poc` mode.
+
+The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, linear-interpolated latency percentiles, and an offline threshold sweep. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, or per-query identity observations.
+
+The current runner is dependency-injected and unit-tested with synthetic inputs. A real report and threshold recommendation remain pending the authorized frozen dataset, exact local model checksums, successful CPU smoke run, and reachable benchmark Qdrant. Phase 2 must not start until that real report is reviewed and explicitly approved.
