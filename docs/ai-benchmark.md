@@ -87,6 +87,16 @@ The executable manifest format is strict JSON; see `services/face-ai/config/benc
 
 Threshold calibration operates offline over one frozen result set. A recommendation must satisfy explicit maximum FAR, optional maximum FRR, and minimum recall limits; otherwise the report states `no_feasible_threshold`. Reports contain aggregates and reproducibility fingerprints only by default. Real metric values are not available until the external authorized dataset and model artifacts are configured.
 
+The offline CLI can validate all manifest paths without initializing InsightFace or Qdrant:
+
+```bash
+uv run --locked --project services/face-ai face-ai-benchmark validate \
+  --manifest /external/benchmark.json \
+  --dataset-root /external/authorized-dataset
+```
+
+`face-ai-benchmark synthetic --output benchmark-results/synthetic.json` exercises fixed observations, metrics, calibration, and canonical reporting without biometric data. Passing this command verifies the harness only; it is not evidence for real model accuracy, threshold suitability, or CPU performance.
+
 ## Approval checklist
 
 Dataset:

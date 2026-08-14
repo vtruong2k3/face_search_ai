@@ -60,4 +60,21 @@ Before a real benchmark, record the SHA-256 of every local ONNX artifact and use
 
 The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, linear-interpolated latency percentiles, and an offline threshold sweep. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, or per-query identity observations.
 
+After `uv sync --locked --project services/face-ai`, validate a frozen manifest without initializing models or Qdrant:
+
+```bash
+uv run --locked --project services/face-ai face-ai-benchmark validate \
+  --manifest /external/benchmark.json \
+  --dataset-root /external/authorized-dataset
+```
+
+Run the deterministic no-biometric-data harness end to end:
+
+```bash
+uv run --locked --project services/face-ai face-ai-benchmark synthetic \
+  --output benchmark-results/synthetic.json
+```
+
+The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output. It does not demonstrate real model quality or CPU performance.
+
 The current runner is dependency-injected and unit-tested with synthetic inputs. A real report and threshold recommendation remain pending the authorized frozen dataset, exact local model checksums, successful CPU smoke run, and reachable benchmark Qdrant. Phase 2 must not start until that real report is reviewed and explicitly approved.
