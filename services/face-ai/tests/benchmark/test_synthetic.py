@@ -22,6 +22,15 @@ def test_synthetic_benchmark_writes_expected_aggregate_report(tmp_path: Path) ->
     assert report["metrics"]["fp"] == 0
     assert report["performance"]["vector_search_count"] == 3
     assert report["performance"]["queries_per_second"] == 40.0
+    assert report["performance"]["enrollment"]["inference_count"] == 1
+    assert report["performance"]["enrollment"]["total_inference_ms"] == 10.0
+    assert report["performance"]["vector_index"] == {
+        "setup_ms": 5.0,
+        "upsert_batch_size": 100,
+        "upserted_vector_count": 1,
+        "upsert_ms": 6.0,
+        "teardown_ms": 7.0,
+    }
     assert report["reproducibility"]["runtime"]["execution_policy"] == "serial"
     assert report["reproducibility"]["runtime"]["operating_system"] == "synthetic"
     assert report["reproducibility"]["execution"]["policy"] == "enrollment_primed_serial"

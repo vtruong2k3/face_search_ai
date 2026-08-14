@@ -6,7 +6,13 @@ from typing import Literal, Protocol
 
 from face_ai.benchmark.execution_policy import BenchmarkExecution
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
-from face_ai.benchmark.metrics import Candidate, QueryObservation, QueryTimings
+from face_ai.benchmark.metrics import (
+    Candidate,
+    EnrollmentTiming,
+    QueryObservation,
+    QueryTimings,
+    VectorIndexTimings,
+)
 from face_ai.pipeline import PipelineResult
 from face_ai.vector_store import VectorIndex, VectorRecord
 
@@ -20,6 +26,12 @@ class BenchmarkRun:
     observations: tuple[QueryObservation, ...]
     enrollment_failures: int
     execution: BenchmarkExecution
+    enrollment_timings: tuple[EnrollmentTiming, ...]
+    indexed_vector_count: int
+    vector_index_timings: VectorIndexTimings
+
+
+BENCHMARK_UPSERT_BATCH_SIZE = 100
 
 
 class BenchmarkRunner:
@@ -38,17 +50,32 @@ class BenchmarkRunner:
 
     def run(self, manifest: BenchmarkManifest) -> BenchmarkRun:
         enrollment_failures = 0
+        enrollment_timings: list[EnrollmentTiming] = []
         observations: list[QueryObservation] = []
         subject_by_photo = {
             entry.image_id: entry.subject_id
             for entry in manifest.enrollment_entries
             if entry.subject_id is not None
         }
-        self._index.create()
+        setup_started = self._clock_ms()
         try:
+            self._index.create()
+            setup_ms = self._clock_ms() - setup_started
             records: list[VectorRecord] = []
             for entry in manifest.enrollment_entries:
+                enrollment_started = self._clock_ms()
                 result = self._pipeline.process(self._load_bytes(entry))
+                enrollment_elapsed = self._clock_ms() - enrollment_started
+                pipeline_timings = result.timings
+                enrollment_timings.append(
+                    EnrollmentTiming(
+                        pipeline_timings.decode_validation_ms,
+                        pipeline_timings.detection_ms,
+                        pipeline_timings.alignment_ms,
+                        pipeline_timings.embedding_ms,
+                        enrollment_elapsed,
+                    )
+                )
                 if len(result.faces) != 1 or entry.subject_id is None:
                     enrollment_failures += 1
                     continue
@@ -61,7 +88,9 @@ class BenchmarkRunner:
                         embedding=result.faces[0].embedding,
                     )
                 )
-            self._index.upsert(records)
+            upsert_started = self._clock_ms()
+            self._index.upsert(records, batch_size=BENCHMARK_UPSERT_BATCH_SIZE)
+            upsert_ms = self._clock_ms() - upsert_started
 
             for entry in manifest.query_entries:
                 started = self._clock_ms()
@@ -92,23 +121,41 @@ class BenchmarkRunner:
                     )
                 elapsed = self._clock_ms() - started
                 pipeline_timings = result.timings
-                timings = QueryTimings(
-                    decode_validation_ms=pipeline_timings.decode_validation_ms,
-                    detection_ms=pipeline_timings.detection_ms,
-                    alignment_ms=pipeline_timings.alignment_ms,
-                    embedding_ms=pipeline_timings.embedding_ms,
-                    vector_search_ms=vector_search_ms,
-                    end_to_end_ms=elapsed,
-                )
                 observations.append(
-                    QueryObservation(entry.image_id, entry.subject_id, candidates, status, timings)
+                    QueryObservation(
+                        entry.image_id,
+                        entry.subject_id,
+                        candidates,
+                        status,
+                        QueryTimings(
+                            pipeline_timings.decode_validation_ms,
+                            pipeline_timings.detection_ms,
+                            pipeline_timings.alignment_ms,
+                            pipeline_timings.embedding_ms,
+                            vector_search_ms,
+                            elapsed,
+                        ),
+                    )
                 )
-            return BenchmarkRun(
-                tuple(observations),
-                enrollment_failures,
-                BenchmarkExecution.enrollment_primed(
-                    warmup_inference_count=len(manifest.enrollment_entries)
-                ),
-            )
         finally:
-            self._index.teardown()
+            teardown_started = self._clock_ms()
+            try:
+                self._index.teardown()
+            finally:
+                teardown_ms = self._clock_ms() - teardown_started
+
+        return BenchmarkRun(
+            tuple(observations),
+            enrollment_failures,
+            BenchmarkExecution.enrollment_primed(
+                warmup_inference_count=len(manifest.enrollment_entries)
+            ),
+            tuple(enrollment_timings),
+            len(records),
+            VectorIndexTimings(
+                setup_ms,
+                upsert_ms,
+                teardown_ms,
+                BENCHMARK_UPSERT_BATCH_SIZE,
+            ),
+        )

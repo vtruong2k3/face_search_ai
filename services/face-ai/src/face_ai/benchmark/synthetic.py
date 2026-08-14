@@ -8,8 +8,10 @@ from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
 from face_ai.benchmark.execution_policy import BenchmarkExecution
 from face_ai.benchmark.metrics import (
     Candidate,
+    EnrollmentTiming,
     QueryObservation,
     QueryTimings,
+    VectorIndexTimings,
     aggregate_performance,
     calculate_metrics,
 )
@@ -69,7 +71,18 @@ def run_synthetic(output: Path) -> dict[str, Any]:
         "query_count": len(observations),
         "enrollment_failures": 0,
         "metrics": asdict(metrics),
-        "performance": asdict(aggregate_performance(observations)),
+        "performance": asdict(
+            aggregate_performance(
+                observations,
+                enrollment_timings=(
+                    EnrollmentTiming(1.0, 2.0, 3.0, 4.0, 10.0),
+                ),
+                indexed_vector_count=1,
+                vector_index_timings=VectorIndexTimings(
+                    5.0, 6.0, 7.0, 100
+                ),
+            )
+        ),
         "calibration": {
             "status": calibration.status,
             "recommended_threshold": calibration.recommended_threshold,

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest
@@ -110,7 +109,9 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     (dataset_root / "queries" / "c.png").write_bytes(b"0")
     output = tmp_path / "benchmark-results" / "real.json"
     index = FakeIndex()
-    clock = iter((0.0, 10.0, 15.0, 20.0, 30.0, 40.0)).__next__
+    clock = iter(
+        (0.0, 5.0, 10.0, 20.0, 25.0, 31.0, 40.0, 45.0, 46.0, 50.0, 60.0, 70.0, 80.0, 87.0)
+    ).__next__
 
     report = execute_benchmark(
         manifest=manifest(),
@@ -140,6 +141,28 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
         "cold_start_measurement": "not_measured",
         "query_latency_scope": "load_process_and_optional_search",
         "query_throughput_scope": "summed_query_end_to_end",
+    }
+    assert report["performance"]["enrollment"] == {
+        "inference_count": 1,
+        "indexed_vector_count": 1,
+        "inference_ms": {
+            stage: {"p50": value, "p90": value, "p95": value, "p99": value}
+            for stage, value in {
+                "decode_validation": 1.0,
+                "detection": 2.0,
+                "alignment": 3.0,
+                "embedding": 4.0,
+                "end_to_end": 10.0,
+            }.items()
+        },
+        "total_inference_ms": 10.0,
+    }
+    assert report["performance"]["vector_index"] == {
+        "setup_ms": 5.0,
+        "upsert_batch_size": 100,
+        "upserted_vector_count": 1,
+        "upsert_ms": 6.0,
+        "teardown_ms": 7.0,
     }
     serialized = output.read_text(encoding="utf-8")
     assert str(dataset_root) not in serialized
@@ -174,7 +197,7 @@ def test_execute_benchmark_repeats_identical_logical_and_canonical_results(
                 pipeline=FakePipeline(),
                 index=index,
                 clock_ms=iter(
-                    (0.0, 10.0, 15.0, 20.0, 30.0, 40.0)
+                    (0.0, 5.0, 10.0, 20.0, 25.0, 31.0, 40.0, 45.0, 46.0, 50.0, 60.0, 70.0, 80.0, 87.0)
                 ).__next__,
                 policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
                 runtime_metadata=_RUNTIME_METADATA,

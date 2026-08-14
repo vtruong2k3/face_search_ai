@@ -49,7 +49,12 @@ def execute_benchmark(
         )
         for threshold in manifest.search.thresholds
     )
-    performance = aggregate_performance(result.observations)
+    performance = aggregate_performance(
+        result.observations,
+        enrollment_timings=result.enrollment_timings,
+        indexed_vector_count=result.indexed_vector_count,
+        vector_index_timings=result.vector_index_timings,
+    )
     report: dict[str, Any] = {
         "benchmark_id": manifest.benchmark_id,
         "mode": manifest.mode.value,

@@ -59,14 +59,61 @@ class QueryObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class EnrollmentTiming:
+    decode_validation_ms: float
+    detection_ms: float
+    alignment_ms: float
+    embedding_ms: float
+    end_to_end_ms: float
+
+    def __post_init__(self) -> None:
+        values = (
+            self.decode_validation_ms,
+            self.detection_ms,
+            self.alignment_ms,
+            self.embedding_ms,
+            self.end_to_end_ms,
+        )
+        if any(not math.isfinite(value) or value < 0 for value in values):
+            raise ValueError("enrollment timings must be finite and non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class VectorIndexTimings:
+    setup_ms: float
+    upsert_ms: float
+    teardown_ms: float
+    upsert_batch_size: int = 100
+
+    def __post_init__(self) -> None:
+        values = (self.setup_ms, self.upsert_ms, self.teardown_ms)
+        if any(not math.isfinite(value) or value < 0 for value in values):
+            raise ValueError("vector index timings must be finite and non-negative")
+        if (
+            isinstance(self.upsert_batch_size, bool)
+            or not isinstance(self.upsert_batch_size, int)
+            or self.upsert_batch_size <= 0
+        ):
+            raise ValueError("upsert batch size must be a positive integer")
+
+
+@dataclass(frozen=True, slots=True)
 class PerformanceResult:
     query_count: int
     vector_search_count: int
     latency_ms: dict[str, dict[str, float | None]]
     queries_per_second: float | None
+    enrollment: dict[str, object]
+    vector_index: dict[str, int | float]
 
 
-def aggregate_performance(observations: tuple[QueryObservation, ...]) -> PerformanceResult:
+def aggregate_performance(
+    observations: tuple[QueryObservation, ...],
+    *,
+    enrollment_timings: tuple[EnrollmentTiming, ...] = (),
+    indexed_vector_count: int = 0,
+    vector_index_timings: VectorIndexTimings | None = None,
+) -> PerformanceResult:
     timings = tuple(item.timings for item in observations)
     search_samples = tuple(
         item.vector_search_ms for item in timings if item.vector_search_ms is not None
@@ -86,6 +133,25 @@ def aggregate_performance(observations: tuple[QueryObservation, ...]) -> Perform
             "end_to_end": latency_percentiles(end_to_end),
         },
         queries_per_second=throughput,
+        enrollment={
+            "inference_count": len(enrollment_timings),
+            "indexed_vector_count": indexed_vector_count,
+            "inference_ms": {
+                "decode_validation": latency_percentiles(tuple(item.decode_validation_ms for item in enrollment_timings)),
+                "detection": latency_percentiles(tuple(item.detection_ms for item in enrollment_timings)),
+                "alignment": latency_percentiles(tuple(item.alignment_ms for item in enrollment_timings)),
+                "embedding": latency_percentiles(tuple(item.embedding_ms for item in enrollment_timings)),
+                "end_to_end": latency_percentiles(tuple(item.end_to_end_ms for item in enrollment_timings)),
+            },
+            "total_inference_ms": sum(item.end_to_end_ms for item in enrollment_timings),
+        },
+        vector_index={
+            "setup_ms": vector_index_timings.setup_ms if vector_index_timings else 0.0,
+            "upsert_batch_size": vector_index_timings.upsert_batch_size if vector_index_timings else 100,
+            "upserted_vector_count": indexed_vector_count,
+            "upsert_ms": vector_index_timings.upsert_ms if vector_index_timings else 0.0,
+            "teardown_ms": vector_index_timings.teardown_ms if vector_index_timings else 0.0,
+        },
     )
 
 

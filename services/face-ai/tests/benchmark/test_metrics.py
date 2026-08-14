@@ -4,8 +4,10 @@ import pytest
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
 from face_ai.benchmark.metrics import (
     Candidate,
+    EnrollmentTiming,
     QueryObservation,
     QueryTimings,
+    VectorIndexTimings,
     aggregate_performance,
     calculate_metrics,
     latency_percentiles,
@@ -71,6 +73,39 @@ def test_performance_aggregates_stages_search_samples_and_serial_throughput() ->
     assert result.queries_per_second == 40.0
 
 
+def test_performance_aggregates_enrollment_and_index_separately() -> None:
+    enrollment = (
+        EnrollmentTiming(1.0, 2.0, 3.0, 4.0, 10.0),
+        EnrollmentTiming(2.0, 3.0, 4.0, 5.0, 20.0),
+    )
+    result = aggregate_performance(
+        observations(),
+        enrollment_timings=enrollment,
+        indexed_vector_count=1,
+        vector_index_timings=VectorIndexTimings(5.0, 6.0, 7.0, 100),
+    )
+
+    assert result.enrollment["inference_count"] == 2
+    assert result.enrollment["indexed_vector_count"] == 1
+    assert result.enrollment["total_inference_ms"] == 30.0
+    inference_ms = result.enrollment["inference_ms"]
+    assert isinstance(inference_ms, dict)
+    assert inference_ms["end_to_end"]["p50"] == 15.0
+    assert result.vector_index == {
+        "setup_ms": 5.0,
+        "upsert_batch_size": 100,
+        "upserted_vector_count": 1,
+        "upsert_ms": 6.0,
+        "teardown_ms": 7.0,
+    }
+    assert result.queries_per_second == 40.0
+
+
+def test_timing_records_reject_invalid_values() -> None:
+    with pytest.raises(ValueError, match="enrollment timings"):
+        EnrollmentTiming(1.0, 2.0, 3.0, 4.0, float("nan"))
+    with pytest.raises(ValueError, match="vector index timings"):
+        VectorIndexTimings(1.0, -1.0, 2.0)
 def test_performance_returns_no_throughput_for_zero_duration() -> None:
     zero = (QueryObservation("q", None, (), "no_face", timing(0.0, vector_search_ms=None)),)
 
