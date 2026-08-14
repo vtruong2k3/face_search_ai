@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build the product in two gated stages: first prove face-search quality on an authorized dataset, then implement the tenant-isolated SaaS MVP. The AI benchmark is a mandatory decision gate. Payment, teams, clustering, branding, custom domains, GPU pools, and distributed scaling remain deferred.
+Build the product through separable implementation and AI-validation tracks. Phase 2 platform-foundation work may proceed while the real authorized AI benchmark remains pending. Checkpoint 1 remains mandatory before approving a production face-search threshold, enabling model-dependent release behavior, or claiming validated AI quality, CPU performance, commercial suitability, or release readiness. Payment, teams, clustering, branding, custom domains, GPU pools, and distributed scaling remain deferred.
 
 ## Architecture decisions
 
@@ -169,13 +169,17 @@ Build the product in two gated stages: first prove face-search quality on an aut
 
 **Estimated scope:** Small
 
-### Checkpoint 1 — AI viability gate
+### Checkpoint 1 — AI benchmark and release-use approval
 
-- [ ] Dataset and model approvals are complete.
-- [ ] Accuracy and CPU performance metrics are reproducible.
-- [ ] User explicitly approves proceeding to SaaS implementation.
+- [ ] Dataset and model approvals required for the intended benchmark scope are complete.
+- [ ] Real accuracy and CPU performance metrics are reproducible on the frozen authorized dataset.
+- [ ] User reviews the real report and approves or rejects the model and threshold policy for model-dependent integration and release use.
+
+Checkpoint 1 is not a prerequisite for Phase 2 platform-foundation implementation. Until it passes, real benchmark results, a production threshold, model suitability, CPU capacity, production model enablement, commercial model use, and commercial/release readiness remain unapproved.
 
 ## Phase 2 — MVP platform foundation
+
+Phase 2 platform-foundation implementation is authorized to proceed while Checkpoint 1 remains incomplete. Phase 2 work must not treat the current PoC model, synthetic benchmark, unmeasured real performance, or unapproved threshold as production evidence.
 
 ### Task 2.1: Harden infrastructure and add MVP migrations
 
@@ -191,7 +195,7 @@ Build the product in two gated stages: first prove face-search quality on an aut
 - [ ] Migration up/down passes on disposable data.
 - [ ] `docker compose config`
 
-**Dependencies:** Checkpoint 1
+**Dependencies:** Checkpoint 0 and explicit user authorization to begin Phase 2 platform-foundation work
 
 **Files likely touched:** `docker-compose.yml`, `migrations/`, `Makefile`, `.env.example`
 
@@ -436,7 +440,7 @@ Build the product in two gated stages: first prove face-search quality on an aut
 
 ### Task 5.3: Expose internal inference endpoint
 
-**Description:** Wrap the approved AI pipeline in an internal-only, bounded, typed endpoint.
+**Description:** Wrap the AI pipeline in an internal-only, bounded, typed endpoint. The boundary may be implemented and tested with fakes or a model configuration authorized for the test scope before Checkpoint 1; production model enablement remains gated.
 
 **Acceptance criteria:**
 - [ ] Request limits/timeouts/authentication and typed errors are enforced.
@@ -446,7 +450,7 @@ Build the product in two gated stages: first prove face-search quality on an aut
 **Verification:**
 - [ ] FastAPI tests and Compose network smoke tests pass.
 
-**Dependencies:** Checkpoint 1
+**Dependencies:** Tasks 5.1 and 5.2. Checkpoint 1 is required before enabling the actual model-backed endpoint for production traffic.
 
 **Files likely touched:** Face AI `main.py`, internal schemas/auth, tests, Compose config
 
@@ -515,17 +519,17 @@ Build the product in two gated stages: first prove face-search quality on an aut
 
 ### Task 6.2: Implement ephemeral Event-scoped search
 
-**Description:** Infer without storing selfie bytes, query only the requested Event, then rank and deduplicate photo results.
+**Description:** Infer without storing selfie bytes, query only the requested Event, then rank and deduplicate photo results. Model-independent plumbing may be implemented before Checkpoint 1, but production model-backed use requires its approved model configuration and threshold.
 
 **Acceptance criteria:**
-- [ ] Qdrant query always includes organization/Event filters and approved threshold.
+- [ ] Qdrant queries always include organization/Event filters. Production or release use applies only the threshold approved through Checkpoint 1; before approval, implementation and tests use an explicitly labeled non-production test threshold.
 - [ ] Results deduplicate by photo ID and rank by best similarity.
 - [ ] Selfie bytes are absent from storage, logs, and post-request state.
 
 **Verification:**
 - [ ] Threshold/ranking/dedup tests and adversarial cross-Event integration tests pass.
 
-**Dependencies:** Task 6.1 and Checkpoint 1 threshold approval
+**Dependencies:** Task 6.1. Checkpoint 1 threshold approval is required before production/release enablement.
 
 **Files likely touched:** search handlers/service, Face AI client, Qdrant/photo adapters, tests
 

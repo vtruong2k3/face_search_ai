@@ -37,9 +37,11 @@ Last updated: 2026-08-14
   - [x] Privacy-safe aggregate condition slicing with sparse suppression
   - [ ] Real threshold recommendation from frozen authorized observations
   - [ ] Record measured CPU latency and throughput
-- [ ] Checkpoint 1: User approves AI quality gate
+- [ ] Checkpoint 1: Real AI benchmark and release-use approval
 
 ## Phase 2 — MVP platform foundation
+
+Phase 2 platform-foundation implementation is authorized to proceed independently of Checkpoint 1. This authorization does not approve a production threshold, real AI quality or CPU-performance claims, commercial use of the current PoC weights, or commercial/release readiness.
 
 - [ ] Task 2.1: Harden infrastructure and add migrations
 - [ ] Task 2.2: Add Go persistence boundaries
@@ -87,9 +89,9 @@ Last updated: 2026-08-14
 - [ ] Task 7.4: Run release verification and complete documentation
 - [ ] Final checkpoint: Release-ready MVP
 
-## Mandatory gate
+## AI evidence and release gate
 
-Phase 2 must not begin until the user reviews the frozen Phase 1 benchmark and explicitly approves the model, threshold policy, accuracy metrics, and CPU performance. The current buffalo_l approval is restricted to a personal non-commercial PoC and does not authorize commercial SaaS release.
+Phase 2 platform-foundation implementation may proceed while the real Phase 1 benchmark and Checkpoint 1 remain incomplete. The incomplete benchmark items must remain unchecked and must not be represented as real accuracy, threshold, latency, throughput, capacity, or memory evidence. Checkpoint 1 remains required before approving a production face-search threshold, enabling a production model-backed path, or representing the AI path as validated for release. The current `buffalo_l` approval is restricted to a personal non-commercial PoC and does not authorize commercial SaaS use, hosted deployment, redistribution, or commercial release.
 
 ## Deferred V2–V4
 
