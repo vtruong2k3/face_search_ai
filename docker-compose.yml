@@ -96,6 +96,8 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.15.4
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
