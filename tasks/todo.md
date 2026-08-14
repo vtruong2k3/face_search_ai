@@ -27,6 +27,7 @@ Last updated: 2026-08-14
 - [ ] Task 1.6: Calibrate threshold and report decision
   - [x] Deterministic threshold sweep and policy implementation
   - [x] Synthetic calibration unit verification
+  - [x] Deterministic stage latency and serial-throughput instrumentation
   - [ ] Real threshold recommendation from frozen authorized observations
   - [ ] Record measured CPU latency and throughput
 - [ ] Checkpoint 1: User approves AI quality gate

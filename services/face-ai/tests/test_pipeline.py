@@ -11,7 +11,7 @@ from face_ai.domain import (
     FaceInferenceError,
     FacialLandmarks,
 )
-from face_ai.pipeline import FacePipeline, normalize_embedding
+from face_ai.pipeline import FacePipeline, PipelineTimings, normalize_embedding
 from face_ai.validation import (
     ImageValidationError,
     ImageValidationLimits,
@@ -125,6 +125,18 @@ def test_normalize_embedding_returns_unit_float32_vector() -> None:
 def test_normalize_embedding_rejects_invalid_vectors(embedding: np.ndarray) -> None:
     with pytest.raises(ValueError):
         normalize_embedding(embedding)
+
+
+def test_pipeline_records_single_pass_stage_totals() -> None:
+    clock = iter((0.0, 1.0, 2.0, 4.0, 5.0, 8.0, 9.0, 13.0, 14.0, 19.0, 20.0, 26.0)).__next__
+    pipeline = FacePipeline(
+        detector=StubDetector(), aligner=StubAligner(), embedder=StubEmbedder(), clock_ms=clock
+    )
+
+    result = pipeline.process(make_image_bytes())
+
+    assert result.timings == PipelineTimings(1.0, 2.0, 8.0, 10.0)
+    assert len(result.faces) == 2
 
 
 def test_pipeline_returns_faces_in_deterministic_spatial_order() -> None:

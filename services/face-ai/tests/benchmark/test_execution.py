@@ -15,7 +15,7 @@ from face_ai.domain import (
     FacialLandmarks,
     SearchResult,
 )
-from face_ai.pipeline import PipelineResult
+from face_ai.pipeline import PipelineResult, PipelineTimings
 from face_ai.validation import ValidatedImage
 
 _FACE = DetectedFace(
@@ -33,7 +33,7 @@ class FakePipeline:
             EmbeddedFace(_FACE, np.array([1.0, 0.0], dtype=np.float32))
             for _ in range(count)
         )
-        return PipelineResult(image, faces)
+        return PipelineResult(image, faces, PipelineTimings(1.0, 2.0, 3.0, 4.0))
 
 
 class FakeIndex:
@@ -100,7 +100,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     (dataset_root / "queries" / "c.png").write_bytes(b"0")
     output = tmp_path / "benchmark-results" / "real.json"
     index = FakeIndex()
-    clock = iter((0.0, 10.0, 20.0, 40.0)).__next__
+    clock = iter((0.0, 10.0, 15.0, 20.0, 30.0, 40.0)).__next__
 
     report = execute_benchmark(
         manifest=manifest(),
@@ -122,7 +122,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     assert str(dataset_root) not in serialized
     assert "query-1" not in serialized
     assert "subject-1" not in serialized
-    assert "embedding" not in serialized
+    assert "raw_timings" not in serialized
     assert json.loads(serialized) == report
 
 

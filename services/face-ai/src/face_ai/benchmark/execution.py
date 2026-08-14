@@ -8,7 +8,7 @@ from typing import Any
 
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
-from face_ai.benchmark.metrics import calculate_metrics
+from face_ai.benchmark.metrics import aggregate_performance, calculate_metrics
 from face_ai.benchmark.report import write_report
 from face_ai.benchmark.runner import BenchmarkRunner, PipelinePort
 from face_ai.vector_store import VectorIndex
@@ -47,6 +47,7 @@ def execute_benchmark(
         )
         for threshold in manifest.search.thresholds
     )
+    performance = aggregate_performance(result.observations)
     report: dict[str, Any] = {
         "benchmark_id": manifest.benchmark_id,
         "mode": manifest.mode.value,
@@ -57,6 +58,7 @@ def execute_benchmark(
         "query_count": len(result.observations),
         "enrollment_failures": result.enrollment_failures,
         "metrics": [asdict(point) for point in metrics],
+        "performance": asdict(performance),
         "calibration": {
             "status": calibration.status,
             "recommended_threshold": calibration.recommended_threshold,

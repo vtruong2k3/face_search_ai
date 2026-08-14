@@ -84,6 +84,8 @@ The executable manifest format is strict JSON; see `services/face-ai/config/benc
 - Undefined zero-denominator rates are reported as null, not zero.
 - No-face and ambiguous multi-face query rates use all query entries.
 - p50/p90/p95/p99 use linear interpolation over sorted non-negative latency samples.
+- Performance stages are decode/validation, detection, alignment, embedding, vector search, and end-to-end query latency. Alignment and embedding are per-image totals across all detected faces; vector-search percentiles include only queries that searched.
+- Serial queries per second is query count divided by summed end-to-end query duration. It excludes initialization, enrollment/upsert, collection lifecycle, teardown, and concurrent service capacity.
 
 Threshold calibration operates offline over one frozen result set. A recommendation must satisfy explicit maximum FAR, optional maximum FRR, and minimum recall limits; otherwise the report states `no_feasible_threshold`. Reports contain aggregates and reproducibility fingerprints only by default. Real metric values are not available until the external authorized dataset and model artifacts are configured.
 
@@ -95,7 +97,7 @@ uv run --locked --project services/face-ai face-ai-benchmark validate \
   --dataset-root /external/authorized-dataset
 ```
 
-`face-ai-benchmark synthetic --output benchmark-results/synthetic.json` exercises fixed observations, metrics, calibration, and canonical reporting without biometric data. Passing this command verifies the harness only; it is not evidence for real model accuracy, threshold suitability, or CPU performance.
+`face-ai-benchmark synthetic --output benchmark-results/synthetic.json` exercises fixed observations, metrics, calibration, canonical reporting, stage timing aggregation, and serial throughput without biometric data. Passing this command verifies the harness only; its deterministic timing values are not evidence for real model accuracy, threshold suitability, or CPU performance.
 
 Once every approval checklist item is complete and the external `buffalo_l` pack, exact checksums, frozen dataset, and Qdrant are configured, the composed real-run path is:
 

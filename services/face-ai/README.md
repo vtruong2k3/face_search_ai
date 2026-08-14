@@ -59,7 +59,7 @@ Before a real benchmark, record the SHA-256 of every local ONNX artifact and use
 
 `config/benchmark.example.json` is the executable strict-JSON manifest example. It records frozen dataset/model identifiers, SHA-256 checksums, relative enrollment/query paths, search limits, and threshold candidates. The validator rejects unknown fields, duplicate IDs or paths, absolute/traversing paths, symlink escapes, malformed checksums, and use of `approved_non_commercial_poc` outside `personal_non_commercial_poc` mode.
 
-The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, linear-interpolated latency percentiles, and an offline threshold sweep. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, or per-query identity observations.
+The model-independent benchmark modules provide deterministic subject-deduplicated observations, Top-K accuracy, precision, recall, FAR, FRR, no-face/ambiguous rates, and linear-interpolated latency percentiles. Performance output aggregates decode/validation, detection, per-image alignment and embedding totals, conditional vector search, and end-to-end query timing, plus serial queries per second. Acceptance uses `score >= threshold`. Reports are canonical aggregate JSON under an ignored `benchmark-results/` or `benchmark-output/` directory and do not include paths, image bytes, embeddings, raw timing samples, or per-query identity observations.
 
 After `uv sync --locked --project services/face-ai`, validate a frozen manifest without initializing models or Qdrant:
 
@@ -76,7 +76,7 @@ uv run --locked --project services/face-ai face-ai-benchmark synthetic \
   --output benchmark-results/synthetic.json
 ```
 
-The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output. It does not demonstrate real model quality or CPU performance.
+The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output, including deterministic synthetic stage timings and serial throughput. These values verify the instrumentation and aggregation contract only; they do not demonstrate real model quality or CPU performance. Serial query throughput excludes model initialization, enrollment/upsert, collection lifecycle, teardown, and concurrent load capacity.
 
 After the external model pack, exact artifact checksums, authorized frozen dataset, and Qdrant are configured, execute the composed real benchmark path with an explicit calibration policy:
 

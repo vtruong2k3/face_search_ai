@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
-from face_ai.benchmark.metrics import Candidate, QueryObservation
+from face_ai.benchmark.metrics import Candidate, QueryObservation, QueryTimings
 from face_ai.pipeline import PipelineResult
 from face_ai.vector_store import VectorIndex, VectorRecord
 
@@ -65,6 +65,7 @@ class BenchmarkRunner:
                 started = self._clock_ms()
                 result = self._pipeline.process(self._load_bytes(entry))
                 status: Literal["ok", "no_face", "ambiguous"]
+                vector_search_ms: float | None = None
                 if len(result.faces) == 0:
                     status = "no_face"
                     candidates: tuple[Candidate, ...] = ()
@@ -73,6 +74,7 @@ class BenchmarkRunner:
                     candidates = ()
                 else:
                     status = "ok"
+                    search_started = self._clock_ms()
                     found = self._index.search(
                         result.faces[0].embedding,
                         dataset_id=manifest.dataset.id,
@@ -80,13 +82,25 @@ class BenchmarkRunner:
                         limit=manifest.search.limit,
                         score_threshold=None,
                     )
+                    vector_search_ms = self._clock_ms() - search_started
                     candidates = tuple(
                         Candidate(subject, item.score)
                         for item in found
                         if (subject := subject_by_photo.get(item.photo_id)) is not None
                     )
                 elapsed = self._clock_ms() - started
-                observations.append(QueryObservation(entry.image_id, entry.subject_id, candidates, status, elapsed))
+                pipeline_timings = result.timings
+                timings = QueryTimings(
+                    decode_validation_ms=pipeline_timings.decode_validation_ms,
+                    detection_ms=pipeline_timings.detection_ms,
+                    alignment_ms=pipeline_timings.alignment_ms,
+                    embedding_ms=pipeline_timings.embedding_ms,
+                    vector_search_ms=vector_search_ms,
+                    end_to_end_ms=elapsed,
+                )
+                observations.append(
+                    QueryObservation(entry.image_id, entry.subject_id, candidates, status, timings)
+                )
             return BenchmarkRun(tuple(observations), enrollment_failures)
         finally:
             self._index.teardown()

@@ -10,7 +10,7 @@ from face_ai.domain import (
     FacialLandmarks,
     SearchResult,
 )
-from face_ai.pipeline import PipelineResult
+from face_ai.pipeline import PipelineResult, PipelineTimings
 from face_ai.validation import ValidatedImage
 
 _FACE = DetectedFace(BoundingBox(0, 0, 2, 2), FacialLandmarks((0, 0), (1, 0), (0.5, 0.5), (0, 1), (1, 1)), 1.0)
@@ -21,7 +21,7 @@ class FakePipeline:
         count = int(content.decode())
         image = ValidatedImage("image/png", 2, 2, np.zeros((2, 2, 3), dtype=np.uint8))
         faces = tuple(EmbeddedFace(_FACE, np.array([1.0, 0.0], dtype=np.float32)) for _ in range(count))
-        return PipelineResult(image, faces)
+        return PipelineResult(image, faces, PipelineTimings(1.0, 2.0, 3.0, 4.0))
 
 
 class FakeIndex:
@@ -63,5 +63,9 @@ def test_runner_indexes_one_face_and_scopes_search() -> None:
     assert len(index.records) == 1
     assert index.searches == [{"dataset_id": "dataset-v1", "event_id": "event-v1", "limit": 10, "score_threshold": None}]
     assert [item.status for item in result.observations] == ["ok", "no_face", "ambiguous"]
+    assert result.observations[0].timings.vector_search_ms == 1
+    assert result.observations[0].timings.end_to_end_ms == 3
+    assert result.observations[1].timings.vector_search_ms is None
+    assert result.observations[2].timings.vector_search_ms is None
     assert result.enrollment_failures == 0
     assert index.torn_down is True

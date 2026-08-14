@@ -20,6 +20,8 @@ def test_synthetic_benchmark_writes_expected_aggregate_report(tmp_path: Path) ->
     assert report["calibration"]["recommended_threshold"] == 0.8
     assert report["metrics"]["tp"] == 1
     assert report["metrics"]["fp"] == 0
-    assert "embedding" not in content
+    assert report["performance"]["vector_search_count"] == 3
+    assert report["performance"]["queries_per_second"] == 40.0
+    assert "subject-" not in content
     assert "query-" not in content
     assert str(tmp_path) not in content
