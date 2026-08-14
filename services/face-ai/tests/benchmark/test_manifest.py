@@ -62,6 +62,25 @@ def test_manifest_loads_strict_json_and_has_stable_fingerprint(tmp_path: Path) -
     assert len(first.query_entries) == 2
 
 
+def test_manifest_preserves_role_relative_order_and_fingerprints_entry_order() -> None:
+    value = valid_manifest()
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    entries[:] = [entries[1], entries[0], entries[2]]
+
+    ordered = BenchmarkManifest.from_dict(value)
+    original_fingerprint = ordered.fingerprint
+
+    assert [entry.image_id for entry in ordered.enrollment_entries] == ["img-001"]
+    assert [entry.image_id for entry in ordered.query_entries] == ["img-002", "img-003"]
+
+    entries[:] = [entries[2], entries[1], entries[0]]
+    reordered = BenchmarkManifest.from_dict(value)
+
+    assert [entry.image_id for entry in reordered.query_entries] == ["img-003", "img-002"]
+    assert reordered.fingerprint != original_fingerprint
+
+
 def test_manifest_normalizes_entry_checksum_and_fingerprint_commits_to_it() -> None:
     value = valid_manifest()
     entries = value["entries"]

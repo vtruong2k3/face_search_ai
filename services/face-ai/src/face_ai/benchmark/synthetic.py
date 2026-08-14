@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
+from face_ai.benchmark.execution_policy import BenchmarkExecution
 from face_ai.benchmark.metrics import (
     Candidate,
     QueryObservation,
@@ -78,6 +79,11 @@ def run_synthetic(output: Path) -> dict[str, Any]:
         "reproducibility": {
             "fixture": "synthetic-v1",
             "runtime": asdict(_SYNTHETIC_RUNTIME),
+            "execution": asdict(
+                BenchmarkExecution.enrollment_primed(
+                    warmup_inference_count=0
+                )
+            ),
             "volatile_fields": [],
         },
     }

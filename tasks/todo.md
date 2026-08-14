@@ -24,6 +24,7 @@ Last updated: 2026-08-14
   - [x] Manifest checksums bound fail-closed to canonical local buffalo_l artifacts
   - [x] Per-entry dataset bytes frozen by SHA-256 with fail-before-side-effects preflight
   - [x] Repeated composed runs produce identical logical and canonical aggregate reports
+  - [x] Explicit enrollment-primed warm execution policy with cold-start exclusion
   - [x] Locked environment includes and imports InsightFace
   - [ ] Real authorized dataset and Qdrant benchmark run
 - [ ] Task 1.6: Calibrate threshold and report decision

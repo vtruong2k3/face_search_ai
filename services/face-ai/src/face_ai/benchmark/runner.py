@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from face_ai.benchmark.execution_policy import BenchmarkExecution
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
 from face_ai.benchmark.metrics import Candidate, QueryObservation, QueryTimings
 from face_ai.pipeline import PipelineResult
@@ -18,6 +19,7 @@ class PipelinePort(Protocol):
 class BenchmarkRun:
     observations: tuple[QueryObservation, ...]
     enrollment_failures: int
+    execution: BenchmarkExecution
 
 
 class BenchmarkRunner:
@@ -101,6 +103,12 @@ class BenchmarkRunner:
                 observations.append(
                     QueryObservation(entry.image_id, entry.subject_id, candidates, status, timings)
                 )
-            return BenchmarkRun(tuple(observations), enrollment_failures)
+            return BenchmarkRun(
+                tuple(observations),
+                enrollment_failures,
+                BenchmarkExecution.enrollment_primed(
+                    warmup_inference_count=len(manifest.enrollment_entries)
+                ),
+            )
         finally:
             self._index.teardown()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from face_ai.benchmark.manifest import BenchmarkManifest
+from face_ai.benchmark.metrics import aggregate_performance
 from face_ai.benchmark.runner import BenchmarkRunner
 from face_ai.domain import (
     BoundingBox,
@@ -69,4 +70,82 @@ def test_runner_indexes_one_face_and_scopes_search() -> None:
     assert result.observations[1].timings.vector_search_ms is None
     assert result.observations[2].timings.vector_search_ms is None
     assert result.enrollment_failures == 0
+    assert result.execution.warmup_inference_count == 1
+    assert result.execution.discarded_query_count == 0
     assert index.torn_down is True
+
+
+def test_runner_uses_enrollment_as_exact_once_warmup_in_manifest_order() -> None:
+    source = {
+        "benchmark_id": "ordered-v1",
+        "mode": "personal_non_commercial_poc",
+        "seed": 9,
+        "dataset": {"id": "dataset-v1", "version": "v1", "event_id": "event-v1"},
+        "model": {
+            "id": "model-v1",
+            "approval": "approved_non_commercial_poc",
+            "detector_sha256": "a" * 64,
+            "embedder_sha256": "b" * 64,
+        },
+        "search": {"limit": 10, "thresholds": [0.5], "top_k": [1]},
+        "entries": [
+            {"image_id": "query-b", "subject_id": None, "path": "query/b.png", "role": "query", "sha256": "0" * 64},
+            {"image_id": "enroll-c", "subject_id": "subject-c", "path": "enroll/c.png", "role": "enrollment", "sha256": "0" * 64},
+            {"image_id": "enroll-a", "subject_id": "subject-a", "path": "enroll/a.png", "role": "enrollment", "sha256": "0" * 64},
+            {"image_id": "query-d", "subject_id": "subject-a", "path": "query/d.png", "role": "query", "sha256": "0" * 64},
+        ],
+    }
+    ordered = BenchmarkManifest.from_dict(source)
+    events: list[str] = []
+    content = {
+        "query-b": b"0",
+        "enroll-c": b"0",
+        "enroll-a": b"2",
+        "query-d": b"1",
+    }
+
+    class RecordingPipeline(FakePipeline):
+        def process(self, image: bytes) -> PipelineResult:
+            events.append(f"process:{image.decode()}")
+            return super().process(image)
+
+    class RecordingIndex(FakeIndex):
+        def create(self) -> None:
+            events.append("create")
+
+        def upsert(self, records: object, *, batch_size: int = 100) -> None:
+            events.append("upsert")
+            super().upsert(records, batch_size=batch_size)
+
+        def search(self, embedding: np.ndarray, **kwargs: object) -> list[SearchResult]:
+            events.append("search")
+            return super().search(embedding, **kwargs)
+
+        def teardown(self) -> None:
+            events.append("teardown")
+            super().teardown()
+
+    index = RecordingIndex()
+    result = BenchmarkRunner(
+        pipeline=RecordingPipeline(),
+        index=index,
+        load_bytes=lambda entry: content[entry.image_id],
+        clock_ms=iter(range(20)).__next__,
+    ).run(ordered)
+
+    assert events == [
+        "create",
+        "process:0",
+        "process:2",
+        "upsert",
+        "process:0",
+        "process:1",
+        "search",
+        "teardown",
+    ]
+    assert result.enrollment_failures == 2
+    assert result.execution.warmup_inference_count == 2
+    assert len(result.observations) == 2
+    performance = aggregate_performance(result.observations)
+    assert performance.query_count == 2
+    assert performance.latency_ms["end_to_end"]["p50"] == 2.0

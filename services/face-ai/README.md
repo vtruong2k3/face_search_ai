@@ -86,7 +86,7 @@ uv run --locked --project services/face-ai face-ai-benchmark synthetic \
   --output benchmark-results/synthetic.json
 ```
 
-The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output, including deterministic synthetic stage timings and serial throughput. These values verify the instrumentation and aggregation contract only; they do not demonstrate real model quality or CPU performance. Serial query throughput excludes model initialization, enrollment/upsert, collection lifecycle, teardown, and concurrent load capacity.
+The synthetic command self-checks fixed expected metrics and writes byte-stable aggregate output, including deterministic synthetic stage timings and serial throughput. These values verify the instrumentation and aggregation contract only; they do not demonstrate real model quality or CPU performance. The fixed `enrollment_primed_serial` policy processes every enrollment entry exactly once in manifest-relative order before every query, treats enrollment inference as the warm-up phase, and includes the first query in all query metrics. Cold process startup, model/session initialization, and first-ever inference are explicitly not measured. Serial query throughput excludes model initialization, enrollment/upsert, collection lifecycle, teardown, and concurrent load capacity.
 
 After the external model pack, exact artifact checksums, authorized frozen dataset, and Qdrant are configured, execute the composed real benchmark path with an explicit calibration policy:
 

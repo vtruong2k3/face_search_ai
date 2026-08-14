@@ -73,6 +73,7 @@ def execute_benchmark(
             "top_k": list(manifest.search.top_k),
             "policy": asdict(policy),
             "runtime": asdict(runtime_metadata),
+            "execution": asdict(result.execution),
         },
     }
     write_report(output, report)

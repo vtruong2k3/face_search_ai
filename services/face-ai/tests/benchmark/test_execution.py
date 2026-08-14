@@ -130,6 +130,17 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     assert [point["threshold"] for point in report["metrics"]] == [0.5, 0.95]
     assert report["reproducibility"]["seed"] == 7
     assert report["reproducibility"]["runtime"]["architecture"] == "test-arch"
+    assert report["reproducibility"]["execution"] == {
+        "policy": "enrollment_primed_serial",
+        "enrollment_order": "manifest",
+        "query_order": "manifest",
+        "warmup_source": "all_enrollment_inference",
+        "warmup_inference_count": 1,
+        "discarded_query_count": 0,
+        "cold_start_measurement": "not_measured",
+        "query_latency_scope": "load_process_and_optional_search",
+        "query_throughput_scope": "summed_query_end_to_end",
+    }
     serialized = output.read_text(encoding="utf-8")
     assert str(dataset_root) not in serialized
     assert "query-1" not in serialized
