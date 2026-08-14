@@ -72,6 +72,7 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
         return {"status": "recommended"}
 
     dependencies = RunDependencies(
+        verify_model=lambda loaded: None,
         get_pipeline=lambda: pipeline,
         create_index=lambda loaded: index,
         execute=execute,
@@ -107,10 +108,54 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
     assert capsys.readouterr().out == "benchmark run completed\n"  # type: ignore[attr-defined]
 
 
+def test_run_command_verifies_model_before_pipeline_and_index(
+    tmp_path: Path, capsys: object
+) -> None:
+    manifest = tmp_path / "private-manifest.json"
+    manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
+    events: list[str] = []
+
+    def reject_model(loaded: object) -> None:
+        events.append("verify")
+        raise RuntimeError(f"private mismatch at {tmp_path}")
+
+    dependencies = RunDependencies(
+        verify_model=reject_model,
+        get_pipeline=lambda: events.append("pipeline"),
+        create_index=lambda loaded: events.append("index"),
+        execute=lambda **kwargs: events.append("execute") or {},
+        clock_ms=lambda: 0.0,
+    )
+
+    exit_code = main(
+        [
+            "run",
+            "--manifest",
+            str(manifest),
+            "--dataset-root",
+            str(tmp_path / "private-dataset"),
+            "--output",
+            str(tmp_path / "benchmark-results" / "run.json"),
+            "--max-far",
+            "0.01",
+            "--min-recall",
+            "0.9",
+        ],
+        run_dependencies=dependencies,
+    )
+
+    assert exit_code == 2
+    assert events == ["verify"]
+    error = capsys.readouterr().err  # type: ignore[attr-defined]
+    assert error == "benchmark run failed\n"
+    assert str(tmp_path) not in error
+
+
 def test_run_command_sanitizes_unavailable_pipeline(tmp_path: Path, capsys: object) -> None:
     manifest = tmp_path / "private-manifest.json"
     manifest.write_text(json.dumps(manifest_value()), encoding="utf-8")
     dependencies = RunDependencies(
+        verify_model=lambda loaded: None,
         get_pipeline=lambda: None,
         create_index=lambda loaded: (_ for _ in ()).throw(AssertionError("must not create index")),
         execute=lambda **kwargs: {},

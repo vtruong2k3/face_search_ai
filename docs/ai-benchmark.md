@@ -61,7 +61,7 @@ A compatible code license does not imply that pretrained weights or their traini
 
 For the local personal proof of concept, the project owner approved InsightFace `buffalo_l` on 2026-08-14 with status `approved_non_commercial_poc`. The pack uses SCRFD detection and ArcFace recognition through ONNX Runtime on CPU. Its pretrained weights are treated as non-commercial-research-only: commercial use, hosted SaaS deployment, and redistribution are not approved.
 
-The implementation expects the pack at an external root under `models/buffalo_l` and refuses to initialize when it is absent, preventing implicit downloads. Model files remain outside this repository. Exact local ONNX artifact SHA-256 values must be recorded before a real benchmark run. Processing assumptions are RGB input validation, RGB-to-BGR conversion at the InsightFace boundary, 640×640 detection, five-point 112×112 alignment, a 512D ArcFace vector, and final L2 normalization by the model-neutral pipeline.
+The implementation expects the pack at an external root under `models/buffalo_l` and requires the canonical SCRFD `det_10g.onnx` and ArcFace `w600k_r50.onnx` files, preventing implicit downloads and ambiguous artifact selection. Model files remain outside this repository. Before any real-run model initialization, Qdrant mutation, or dataset image read, the command verifies both local artifact byte hashes against the strict manifest and fails with sanitized output on any mismatch. Processing assumptions are RGB input validation, RGB-to-BGR conversion at the InsightFace boundary, 640×640 detection, five-point 112×112 alignment, a 512D ArcFace vector, and final L2 normalization by the model-neutral pipeline.
 
 ## Runtime and reporting controls
 

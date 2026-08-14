@@ -12,8 +12,8 @@ Last updated: 2026-08-14
 
 - [x] Task 1.1: Define stable AI domain interfaces
 - [x] Task 1.2: Add model lifecycle and ONNX provider selection
-- [x] Task 1.3: Implement detection, alignment, and embedding (personal non-commercial buffalo_l PoC; cached runtime/readiness integration unit-verified; real CPU smoke pending local pack/image)
-- [x] Task 1.4: Add benchmark Qdrant adapter (unit-verified; Compose integration pending reachable Qdrant)
+- [x] Task 1.3: Implement detection, alignment, and embedding (personal non-commercial buffalo_l PoC; cached runtime/readiness unit-verified; real CPU model initialization verified; authorized-image inference smoke pending)
+- [x] Task 1.4: Add benchmark Qdrant adapter (unit and real local Qdrant integration verified)
 - [ ] Task 1.5: Build reproducible benchmark runner
   - [x] Strict JSON manifest validation and stable fingerprints
   - [x] Dependency-injected enrollment/query runner
@@ -21,6 +21,7 @@ Last updated: 2026-08-14
   - [x] Synthetic unit verification with mathematically known results
   - [x] Executable offline validation and synthetic benchmark CLI
   - [x] Executable real-benchmark composition path unit-verified
+  - [x] Manifest checksums bound fail-closed to canonical local buffalo_l artifacts
   - [x] Locked environment includes and imports InsightFace
   - [ ] Real authorized dataset and Qdrant benchmark run
 - [ ] Task 1.6: Calibrate threshold and report decision

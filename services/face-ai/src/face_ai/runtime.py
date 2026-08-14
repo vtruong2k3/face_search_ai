@@ -12,7 +12,11 @@ import numpy
 import onnxruntime  # type: ignore[import-untyped]
 from PIL import Image
 
-from face_ai.models.insightface import InsightFaceAdapters, prepare_buffalo_l
+from face_ai.models.insightface import (
+    InsightFaceAdapters,
+    prepare_buffalo_l,
+    resolve_buffalo_l_artifacts,
+)
 from face_ai.pipeline import FacePipeline
 from face_ai.settings import Settings
 
@@ -167,6 +171,24 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: model_file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def verify_buffalo_l_checksums(
+    *,
+    model_root: Path,
+    detector_sha256: str,
+    embedder_sha256: str,
+) -> None:
+    try:
+        artifacts = resolve_buffalo_l_artifacts(model_root)
+        matches = (
+            _sha256(artifacts.detector) == detector_sha256.lower()
+            and _sha256(artifacts.embedder) == embedder_sha256.lower()
+        )
+    except (OSError, RuntimeError) as error:
+        raise RuntimeError("model artifact verification failed") from error
+    if not matches:
+        raise RuntimeError("model artifact verification failed")
 
 
 @dataclass(frozen=True, slots=True)

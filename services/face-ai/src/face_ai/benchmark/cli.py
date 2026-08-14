@@ -16,13 +16,14 @@ from face_ai.benchmark.manifest import BenchmarkManifest, ManifestError
 from face_ai.benchmark.synthetic import run_synthetic
 from face_ai.pipeline import FacePipeline
 from face_ai.qdrant_store import BenchmarkQdrantIndex, QdrantClientPort
-from face_ai.runtime import get_insightface_pipeline_runtime
+from face_ai.runtime import get_insightface_pipeline_runtime, verify_buffalo_l_checksums
 from face_ai.settings import get_settings
 from face_ai.vector_store import VectorCollection, VectorDistance, VectorIndex
 
 
 @dataclass(frozen=True, slots=True)
 class RunDependencies:
+    verify_model: Callable[[BenchmarkManifest], None]
     get_pipeline: Callable[[], FacePipeline | Any | None]
     create_index: Callable[[BenchmarkManifest], VectorIndex | Any]
     execute: Callable[..., dict[str, Any]]
@@ -76,6 +77,7 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
             max_frr=args.max_frr,
         )
         manifest = BenchmarkManifest.load(args.manifest)
+        dependencies.verify_model(manifest)
         pipeline = dependencies.get_pipeline()
         if pipeline is None:
             raise RuntimeError("pipeline is unavailable")
@@ -99,6 +101,16 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
 def _production_dependencies() -> RunDependencies:
     settings = get_settings()
 
+    def verify_model(manifest: BenchmarkManifest) -> None:
+        model_root = settings.insightface_model_root
+        if not settings.insightface_enabled or model_root is None:
+            raise RuntimeError("pipeline is unavailable")
+        verify_buffalo_l_checksums(
+            model_root=model_root,
+            detector_sha256=manifest.model.detector_sha256,
+            embedder_sha256=manifest.model.embedder_sha256,
+        )
+
     def get_pipeline() -> FacePipeline | None:
         return get_insightface_pipeline_runtime(settings).pipeline()
 
@@ -111,6 +123,7 @@ def _production_dependencies() -> RunDependencies:
         )
 
     return RunDependencies(
+        verify_model=verify_model,
         get_pipeline=get_pipeline,
         create_index=create_index,
         execute=execute_benchmark,

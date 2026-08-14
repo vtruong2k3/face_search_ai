@@ -11,6 +11,7 @@ from face_ai.models.insightface import (
     InsightFaceDetector,
     InsightFaceEmbedder,
     prepare_buffalo_l,
+    resolve_buffalo_l_artifacts,
 )
 
 
@@ -125,6 +126,46 @@ def test_embedder_rejects_invalid_output(output: np.ndarray) -> None:
         )
 
 
+def test_resolve_buffalo_l_artifacts_uses_canonical_model_roles(tmp_path: Path) -> None:
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    detector = pack / "det_10g.onnx"
+    embedder = pack / "w600k_r50.onnx"
+    detector.write_bytes(b"detector")
+    embedder.write_bytes(b"embedder")
+
+    artifacts = resolve_buffalo_l_artifacts(tmp_path)
+
+    assert artifacts.detector == detector
+    assert artifacts.embedder == embedder
+
+
+@pytest.mark.parametrize("missing_name", ["det_10g.onnx", "w600k_r50.onnx"])
+def test_resolve_buffalo_l_artifacts_requires_each_canonical_role(
+    tmp_path: Path, missing_name: str
+) -> None:
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    for name in ("det_10g.onnx", "w600k_r50.onnx"):
+        if name != missing_name:
+            (pack / name).write_bytes(name.encode())
+
+    with pytest.raises(RuntimeError, match="artifacts are unavailable"):
+        resolve_buffalo_l_artifacts(tmp_path)
+
+
+def test_resolve_buffalo_l_artifacts_rejects_symlink_escape(tmp_path: Path) -> None:
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    outside = tmp_path / "outside.onnx"
+    outside.write_bytes(b"detector")
+    (pack / "det_10g.onnx").symlink_to(outside)
+    (pack / "w600k_r50.onnx").write_bytes(b"embedder")
+
+    with pytest.raises(RuntimeError, match="artifacts are unavailable"):
+        resolve_buffalo_l_artifacts(tmp_path)
+
+
 def test_prepare_requires_local_pack_before_factory_call(tmp_path: Path) -> None:
     called = False
 
@@ -133,14 +174,17 @@ def test_prepare_requires_local_pack_before_factory_call(tmp_path: Path) -> None
         called = True
         return FakeAnalysis()
 
-    with pytest.raises(RuntimeError, match="not available"):
+    with pytest.raises(RuntimeError, match="unavailable"):
         prepare_buffalo_l(model_root=tmp_path, analysis_factory=factory)
 
     assert called is False
 
 
 def test_prepare_uses_cpu_without_downloading(tmp_path: Path) -> None:
-    (tmp_path / "models" / "buffalo_l").mkdir(parents=True)
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    (pack / "det_10g.onnx").write_bytes(b"detector")
+    (pack / "w600k_r50.onnx").write_bytes(b"embedder")
     app = FakeAnalysis()
     app.models["recognition"] = FakeRecognition(np.ones((1, 512), dtype=np.float32))
     captured: dict[str, Any] = {}

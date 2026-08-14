@@ -10,7 +10,8 @@ Keep weights outside this repository. Arrange the externally obtained model pack
 /absolute/external/root/
 └── models/
     └── buffalo_l/
-        └── *.onnx
+        ├── det_10g.onnx
+        └── w600k_r50.onnx
 ```
 
 Configure:
@@ -22,7 +23,7 @@ export FACE_AI_INSIGHTFACE_PACK=buffalo_l
 export FACE_AI_ONNX_PROVIDER=CPUExecutionProvider
 ```
 
-The adapter verifies that `models/buffalo_l` exists before creating `FaceAnalysis`, so normal startup and tests do not implicitly download model weights. InsightFace is disabled by default. When enabled, readiness initializes one cached pipeline per effective model configuration and returns `503 not_ready` if the external root, CPU provider, pack, or recognition model is unavailable. Health output uses sanitized states and never returns the model root or raw initialization error.
+The adapter requires the canonical SCRFD `det_10g.onnx` and ArcFace `w600k_r50.onnx` artifacts before creating `FaceAnalysis`, so normal startup and tests do not implicitly download model weights. InsightFace is disabled by default. When enabled, readiness initializes one cached pipeline per effective model configuration and returns `503 not_ready` if the external root, CPU provider, pack, or recognition model is unavailable. Health output uses sanitized states and never returns the model root or raw initialization error.
 
 Install dependencies from the locked project environment. When `uv` is available:
 
@@ -89,6 +90,6 @@ uv run --locked --project services/face-ai face-ai-benchmark run \
   --max-frr 0.10
 ```
 
-The command reads `FACE_AI_INSIGHTFACE_*`, `FACE_AI_ONNX_PROVIDER`, and `FACE_AI_QDRANT_URL` from the environment, creates a temporary deterministic cosine collection, and always attempts teardown after runner startup. Errors are sanitized. Unit tests prove composition only; they are not real accuracy, threshold, latency, or throughput evidence.
+The command reads `FACE_AI_INSIGHTFACE_*`, `FACE_AI_ONNX_PROVIDER`, and `FACE_AI_QDRANT_URL` from the environment. Before initializing model sessions, creating Qdrant collections, or reading dataset images, it hashes the canonical local SCRFD and ArcFace artifacts and requires an exact match with the manifest. It then creates a temporary deterministic cosine collection and always attempts teardown after runner startup. Errors are sanitized. Unit tests prove composition only; they are not real accuracy, threshold, latency, or throughput evidence.
 
 The current runner is dependency-injected and unit-tested with synthetic inputs. A real report and threshold recommendation remain pending the authorized frozen dataset, exact local model checksums, successful CPU smoke run, and reachable benchmark Qdrant. Phase 2 must not start until that real report is reviewed and explicitly approved.

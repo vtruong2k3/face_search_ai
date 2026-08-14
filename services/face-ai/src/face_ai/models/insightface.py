@@ -33,6 +33,12 @@ AlignmentFunction = Callable[[np.ndarray, np.ndarray, int], np.ndarray]
 
 
 @dataclass(frozen=True, slots=True)
+class BuffaloLArtifacts:
+    detector: Path
+    embedder: Path
+
+
+@dataclass(frozen=True, slots=True)
 class InsightFaceAdapters:
     detector: InsightFaceDetector
     aligner: InsightFaceAligner
@@ -125,6 +131,25 @@ class InsightFaceEmbedder:
         return output
 
 
+def resolve_buffalo_l_artifacts(model_root: Path) -> BuffaloLArtifacts:
+    pack_path = model_root / "models" / "buffalo_l"
+    try:
+        resolved_pack = pack_path.resolve(strict=True)
+        artifacts = BuffaloLArtifacts(
+            detector=(pack_path / "det_10g.onnx").resolve(strict=True),
+            embedder=(pack_path / "w600k_r50.onnx").resolve(strict=True),
+        )
+    except OSError as error:
+        raise RuntimeError("buffalo_l artifacts are unavailable") from error
+
+    if not resolved_pack.is_dir() or any(
+        not path.is_file() or not path.is_relative_to(resolved_pack)
+        for path in (artifacts.detector, artifacts.embedder)
+    ):
+        raise RuntimeError("buffalo_l artifacts are unavailable")
+    return artifacts
+
+
 def prepare_buffalo_l(
     *,
     model_root: Path,
@@ -133,13 +158,11 @@ def prepare_buffalo_l(
     detection_size: tuple[int, int] = (640, 640),
     detection_threshold: float = 0.5,
 ) -> InsightFaceAdapters:
-    pack_path = model_root / "models" / "buffalo_l"
-    if not pack_path.is_dir():
-        raise RuntimeError("buffalo_l model pack is not available locally")
+    resolve_buffalo_l_artifacts(model_root)
 
     if analysis_factory is None or align is None:
-        from insightface.app import FaceAnalysis  # type: ignore[import-not-found]
-        from insightface.utils.face_align import (  # type: ignore[import-not-found]
+        from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
+        from insightface.utils.face_align import (  # type: ignore[import-untyped]
             norm_crop,
         )
 

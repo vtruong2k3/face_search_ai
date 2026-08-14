@@ -12,6 +12,7 @@ from face_ai.runtime import (
     ModelArtifact,
     ModelRuntime,
     runtime_status,
+    verify_buffalo_l_checksums,
 )
 from face_ai.settings import Settings
 
@@ -35,6 +36,39 @@ class FakeSessionFactory:
 def write_model(path: Path, content: bytes) -> str:
     path.write_bytes(content)
     return hashlib.sha256(content).hexdigest()
+
+
+def test_verify_buffalo_l_checksums_matches_canonical_artifacts(tmp_path: Path) -> None:
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    detector_sha256 = write_model(pack / "det_10g.onnx", b"detector")
+    embedder_sha256 = write_model(pack / "w600k_r50.onnx", b"embedder")
+
+    verify_buffalo_l_checksums(
+        model_root=tmp_path,
+        detector_sha256=detector_sha256.upper(),
+        embedder_sha256=embedder_sha256.upper(),
+    )
+
+
+@pytest.mark.parametrize(
+    ("detector_sha256", "embedder_sha256"),
+    [("0" * 64, None), (None, "0" * 64)],
+)
+def test_verify_buffalo_l_checksums_rejects_mismatch(
+    tmp_path: Path, detector_sha256: str | None, embedder_sha256: str | None
+) -> None:
+    pack = tmp_path / "models" / "buffalo_l"
+    pack.mkdir(parents=True)
+    actual_detector = write_model(pack / "det_10g.onnx", b"detector")
+    actual_embedder = write_model(pack / "w600k_r50.onnx", b"embedder")
+
+    with pytest.raises(RuntimeError, match="model artifact verification failed"):
+        verify_buffalo_l_checksums(
+            model_root=tmp_path,
+            detector_sha256=detector_sha256 or actual_detector,
+            embedder_sha256=embedder_sha256 or actual_embedder,
+        )
 
 
 def test_settings_default_to_cpu_and_optional_models() -> None:
