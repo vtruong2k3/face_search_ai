@@ -1,0 +1,45 @@
+node_modules/
+.next/
+.venv/
+.bootstrap-venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+coverage/
+dist/
+bin/
+.DS_Store
+
+# Sensitive AI datasets and derived biometric artifacts
+data/
+datasets/
+benchmark-data/
+**/data/
+**/datasets/
+**/benchmark-data/
+**/enrollment/
+**/queries/
+**/selfies/
+**/embeddings/
+**/benchmark-results/
+**/benchmark-output/
+*.npy
+*.npz
+*.embedding
+*.embeddings
+
+# Model artifacts require provenance and license review; keep them external.
+# Do not ignore source-code packages named `models`.
+/models/
+/weights/
+**/model-artifacts/
+**/model-weights/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.engine

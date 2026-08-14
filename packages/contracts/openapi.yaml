@@ -1,0 +1,42 @@
+openapi: 3.1.0
+info:
+  title: Face Search AI API
+  version: 0.1.0
+  description: Initial public API scaffold. Business resources are intentionally not defined yet.
+  license:
+    name: Proprietary
+security: []
+servers:
+  - url: /api/v1
+paths:
+  /:
+    get:
+      summary: Get API information
+      operationId: getApiInfo
+      responses:
+        "200":
+          description: API information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiInfo"
+components:
+  schemas:
+    ApiInfo:
+      type: object
+      required: [name, version]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        traceId:
+          type: string

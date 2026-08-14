@@ -1,0 +1,107 @@
+package platform
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+
+	"github.com/face-search-ai/api/internal/config"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/redis/go-redis/v9"
+)
+
+type Dependencies struct {
+	postgres   *pgxpool.Pool
+	redis      *redis.Client
+	minio      *minio.Client
+	cfg        config.Config
+	httpClient *http.Client
+}
+
+type Status struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("postgres config: %w", err)
+	}
+	redisOptions, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("redis config: %w", err)
+	}
+	minioClient, err := minio.New(cfg.MinIOEndpoint, &minio.Options{Creds: credentials.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""), Secure: cfg.MinIOUseTLS})
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("minio config: %w", err)
+	}
+	return &Dependencies{postgres: pool, redis: redis.NewClient(redisOptions), minio: minioClient, cfg: cfg, httpClient: &http.Client{Timeout: cfg.DependencyTimeout}}, nil
+}
+
+func (d *Dependencies) Close() { d.redis.Close(); d.postgres.Close() }
+
+func (d *Dependencies) Check(ctx context.Context) map[string]Status {
+	checks := map[string]func(context.Context) error{
+		"postgres": d.postgres.Ping,
+		"redis":    func(ctx context.Context) error { return d.redis.Ping(ctx).Err() },
+		"minio":    func(ctx context.Context) error { _, err := d.minio.ListBuckets(ctx); return err },
+		"qdrant":   func(ctx context.Context) error { return d.get(ctx, strings.TrimRight(d.cfg.QdrantURL, "/")+"/healthz") },
+		"face_ai": func(ctx context.Context) error {
+			return d.get(ctx, strings.TrimRight(d.cfg.FaceAIURL, "/")+"/health/ready")
+		},
+	}
+	result := make(map[string]Status, len(checks))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for name, check := range checks {
+		name, check := name, check
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			checkCtx, cancel := context.WithTimeout(ctx, d.cfg.DependencyTimeout)
+			defer cancel()
+			err := check(checkCtx)
+			status := Status{OK: err == nil}
+			if err != nil {
+				status.Error = err.Error()
+			}
+			mu.Lock()
+			result[name] = status
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return result
+}
+
+func (d *Dependencies) get(ctx context.Context, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func Ready(statuses map[string]Status) bool {
+	for _, status := range statuses {
+		if !status.OK {
+			return false
+		}
+	}
+	return true
+}

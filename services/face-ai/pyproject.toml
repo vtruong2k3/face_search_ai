@@ -1,0 +1,39 @@
+[project]
+name = "face-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Bot MMO", email = "bot@mmo.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.1",
+    "insightface>=0.7.3",
+    "numpy>=2.4.6",
+    "onnxruntime>=1.28.0",
+    "opencv-python-headless>=5.0.0.93",
+    "pillow>=12.3.0",
+    "prometheus-client>=0.26.0",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "qdrant-client>=1.19.0",
+    "structlog>=26.1.0",
+    "uvicorn[standard]>=0.52.2",
+]
+
+[project.scripts]
+face-ai = "face_ai:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.2",
+]

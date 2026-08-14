@@ -1,0 +1,64 @@
+# Copy this file to an ignored local configuration before adding real values.
+# The benchmark runner will refuse to start until both approvals are `approved`.
+
+benchmark:
+  id: "poc-v1"
+  seed: 20260814
+  output_directory: "benchmark-results/poc-v1"
+  dataset_partition: "authorized-poc-v1"
+
+dataset:
+  # Must resolve outside this repository. Prefer setting FACE_AI_DATASET_ROOT
+  # rather than writing a machine-specific path here.
+  root: "/absolute/path/outside/repository"
+  manifest: "manifest.yaml"
+  version: "replace-with-frozen-version"
+  approval:
+    status: "pending" # pending | approved | rejected
+    custodian: ""
+    lawful_basis_reference: ""
+    consent_reference: ""
+    commercial_evaluation_permitted: false
+    retention_deadline: ""
+    deletion_owner: ""
+    reviewer: ""
+    reviewed_at: ""
+
+model:
+  detector:
+    name: "SCRFD (InsightFace buffalo_l)"
+    version: "buffalo_l-local-pack"
+    source_url: "https://github.com/deepinsight/insightface/tree/master/model_zoo"
+    artifact_sha256: "replace-with-local-artifact-sha256"
+    code_license: "Apache-2.0 (review exact installed InsightFace release)"
+    weights_license: "non-commercial research only"
+    disclosed_restrictions: "Local personal non-commercial PoC only; not approved for commercial SaaS."
+  embedder:
+    name: "ArcFace (InsightFace buffalo_l)"
+    version: "buffalo_l-local-pack"
+    source_url: "https://github.com/deepinsight/insightface/tree/master/model_zoo"
+    artifact_sha256: "replace-with-local-artifact-sha256"
+    code_license: "Apache-2.0 (review exact installed InsightFace release)"
+    weights_license: "non-commercial research only"
+    disclosed_restrictions: "Local personal non-commercial PoC only; not approved for commercial SaaS."
+  approval:
+    status: "approved_non_commercial_poc" # pending | approved_non_commercial_poc | approved | rejected
+    commercial_use_permitted: false
+    reviewer: "project owner"
+    reviewed_at: "2026-08-14"
+    decision_reference: "User-approved personal-use scope; commercial release remains blocked."
+
+protocol:
+  # Paths in the manifest must be relative to dataset.root. Image and subject
+  # identifiers must be opaque. A file may not appear in both roles.
+  enrollment_role: "enrollment"
+  query_role: "query"
+  reject_split_overlap: true
+  reject_absolute_paths: true
+  reject_path_traversal: true
+
+reporting:
+  include_image_bytes: false
+  include_direct_identifiers: false
+  include_embeddings: false
+  use_opaque_ids: true
