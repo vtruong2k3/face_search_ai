@@ -33,6 +33,7 @@ Last updated: 2026-08-14
   - [x] Synthetic calibration unit verification
   - [x] Deterministic stage latency and serial-throughput instrumentation
   - [x] Sanitized hardware/runtime reproducibility metadata
+  - [x] Process CPU-time and process-lifetime peak-RSS instrumentation
   - [ ] Real threshold recommendation from frozen authorized observations
   - [ ] Record measured CPU latency and throughput
 - [ ] Checkpoint 1: User approves AI quality gate

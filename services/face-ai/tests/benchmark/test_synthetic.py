@@ -31,6 +31,13 @@ def test_synthetic_benchmark_writes_expected_aggregate_report(tmp_path: Path) ->
         "upsert_ms": 6.0,
         "teardown_ms": 7.0,
     }
+    assert report["performance"]["process_resources"] == {
+        "status": "synthetic",
+        "cpu_time_scope": "benchmark_runner_process_user_and_system",
+        "process_cpu_ms": 8.0,
+        "peak_rss_scope": "post_run_process_lifetime_high_water",
+        "peak_rss_bytes": 1_048_576,
+    }
     assert report["reproducibility"]["runtime"]["execution_policy"] == "serial"
     assert report["reproducibility"]["runtime"]["operating_system"] == "synthetic"
     assert report["reproducibility"]["execution"]["policy"] == "enrollment_primed_serial"

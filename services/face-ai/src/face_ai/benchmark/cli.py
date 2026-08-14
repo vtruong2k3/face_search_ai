@@ -13,6 +13,10 @@ from qdrant_client import QdrantClient
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestError
+from face_ai.benchmark.process_resources import (
+    ProcessResourceProbe,
+    ProcessResourceSample,
+)
 from face_ai.benchmark.runtime_metadata import RuntimeMetadata, collect_runtime_metadata
 from face_ai.benchmark.synthetic import run_synthetic
 from face_ai.pipeline import FacePipeline
@@ -31,6 +35,7 @@ class RunDependencies:
     create_index: Callable[[BenchmarkManifest], VectorIndex | Any]
     execute: Callable[..., dict[str, Any]]
     clock_ms: Callable[[], float]
+    resource_sample: Callable[[], ProcessResourceSample | None]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -96,6 +101,7 @@ def _run(args: argparse.Namespace, dependencies: RunDependencies) -> int:
             clock_ms=dependencies.clock_ms,
             policy=policy,
             runtime_metadata=runtime_metadata,
+            resource_sample=dependencies.resource_sample,
         )
     except Exception:  # noqa: BLE001 -- CLI must sanitize external/model/storage failures
         print("benchmark run failed", file=sys.stderr)
@@ -128,6 +134,7 @@ def _production_dependencies() -> RunDependencies:
             collection=collection,
         )
 
+    resource_probe = ProcessResourceProbe()
     return RunDependencies(
         verify_dataset=lambda manifest, root: manifest.verify_dataset(root),
         verify_model=verify_model,
@@ -136,6 +143,7 @@ def _production_dependencies() -> RunDependencies:
         create_index=create_index,
         execute=execute_benchmark,
         clock_ms=lambda: time.perf_counter_ns() / 1_000_000,
+        resource_sample=resource_probe.sample,
     )
 
 

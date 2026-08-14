@@ -98,6 +98,7 @@ def test_run_command_passes_explicit_policy_to_injected_executor(
         create_index=lambda loaded: index,
         execute=execute,
         clock_ms=lambda: 0.0,
+        resource_sample=lambda: None,
     )
     output = tmp_path / "benchmark-results" / "run.json"
 
@@ -148,6 +149,7 @@ def test_run_command_rejects_dataset_before_model_pipeline_and_index(
         create_index=lambda loaded: events.append("index"),
         execute=lambda **kwargs: events.append("execute") or {},
         clock_ms=lambda: 0.0,
+        resource_sample=lambda: None,
     )
 
     exit_code = main(
@@ -193,6 +195,7 @@ def test_run_command_verifies_model_before_pipeline_and_index(
         create_index=lambda loaded: events.append("index"),
         execute=lambda **kwargs: events.append("execute") or {},
         clock_ms=lambda: 0.0,
+        resource_sample=lambda: None,
     )
 
     exit_code = main(
@@ -238,6 +241,7 @@ def test_run_command_sanitizes_runtime_metadata_failure_before_pipeline(
         create_index=lambda loaded: events.append("index"),
         execute=lambda **kwargs: events.append("execute") or {},
         clock_ms=lambda: 0.0,
+        resource_sample=lambda: None,
     )
 
     exit_code = main(
@@ -267,6 +271,7 @@ def test_run_command_sanitizes_unavailable_pipeline(
         create_index=lambda loaded: (_ for _ in ()).throw(AssertionError("must not create index")),
         execute=lambda **kwargs: {},
         clock_ms=lambda: 0.0,
+        resource_sample=lambda: None,
     )
 
     exit_code = main(

@@ -8,6 +8,7 @@ import pytest
 from face_ai.benchmark.calibration import CalibrationPolicy
 from face_ai.benchmark.execution import execute_benchmark
 from face_ai.benchmark.manifest import BenchmarkManifest
+from face_ai.benchmark.process_resources import ProcessResourceSample
 from face_ai.benchmark.runtime_metadata import RuntimeMetadata
 from face_ai.domain import (
     BoundingBox,
@@ -113,6 +114,13 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
         (0.0, 5.0, 10.0, 20.0, 25.0, 31.0, 40.0, 45.0, 46.0, 50.0, 60.0, 70.0, 80.0, 87.0)
     ).__next__
 
+    resource_samples = iter(
+        (
+            ProcessResourceSample(100.0, 1_000),
+            ProcessResourceSample(125.5, 2_000),
+        )
+    )
+
     report = execute_benchmark(
         manifest=manifest(),
         dataset_root=dataset_root,
@@ -122,6 +130,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
         clock_ms=clock,
         policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
         runtime_metadata=_RUNTIME_METADATA,
+        resource_sample=resource_samples.__next__,
     )
 
     assert index.torn_down is True
@@ -164,6 +173,13 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
         "upsert_ms": 6.0,
         "teardown_ms": 7.0,
     }
+    assert report["performance"]["process_resources"] == {
+        "status": "available",
+        "cpu_time_scope": "benchmark_runner_process_user_and_system",
+        "process_cpu_ms": 25.5,
+        "peak_rss_scope": "post_run_process_lifetime_high_water",
+        "peak_rss_bytes": 2_000,
+    }
     serialized = output.read_text(encoding="utf-8")
     assert str(dataset_root) not in serialized
     assert "query-1" not in serialized
@@ -201,6 +217,12 @@ def test_execute_benchmark_repeats_identical_logical_and_canonical_results(
                 ).__next__,
                 policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
                 runtime_metadata=_RUNTIME_METADATA,
+                resource_sample=iter(
+                    (
+                        ProcessResourceSample(100.0, 1_000),
+                        ProcessResourceSample(125.5, 2_000),
+                    )
+                ).__next__,
             )
         )
         assert index.torn_down is True
@@ -246,6 +268,7 @@ def test_execute_benchmark_does_not_write_report_after_runner_failure(tmp_path: 
             clock_ms=lambda: 0.0,
             policy=CalibrationPolicy(max_far=0.0, min_recall=0.5),
             runtime_metadata=_RUNTIME_METADATA,
+            resource_sample=lambda: None,
         )
 
     assert index.torn_down is True

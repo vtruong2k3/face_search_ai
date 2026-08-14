@@ -15,6 +15,7 @@ from face_ai.benchmark.metrics import (
     aggregate_performance,
     calculate_metrics,
 )
+from face_ai.benchmark.process_resources import ProcessResourceEvidence
 from face_ai.benchmark.report import write_report
 from face_ai.benchmark.runtime_metadata import RuntimeMetadata
 
@@ -61,6 +62,26 @@ def run_synthetic(output: Path) -> dict[str, Any]:
     if (metrics.tp, metrics.fp, metrics.tn, metrics.fn) != (1, 0, 2, 1):
         raise RuntimeError("synthetic benchmark self-check failed")
 
+    performance = asdict(
+        aggregate_performance(
+            observations,
+            enrollment_timings=(
+                EnrollmentTiming(1.0, 2.0, 3.0, 4.0, 10.0),
+            ),
+            indexed_vector_count=1,
+            vector_index_timings=VectorIndexTimings(5.0, 6.0, 7.0, 100),
+        )
+    )
+    performance["process_resources"] = asdict(
+        ProcessResourceEvidence(
+            "synthetic",
+            "benchmark_runner_process_user_and_system",
+            8.0,
+            "post_run_process_lifetime_high_water",
+            1_048_576,
+        )
+    )
+
     report: dict[str, Any] = {
         "benchmark_id": "synthetic-v1",
         "mode": "synthetic_no_biometric_data",
@@ -71,18 +92,7 @@ def run_synthetic(output: Path) -> dict[str, Any]:
         "query_count": len(observations),
         "enrollment_failures": 0,
         "metrics": asdict(metrics),
-        "performance": asdict(
-            aggregate_performance(
-                observations,
-                enrollment_timings=(
-                    EnrollmentTiming(1.0, 2.0, 3.0, 4.0, 10.0),
-                ),
-                indexed_vector_count=1,
-                vector_index_timings=VectorIndexTimings(
-                    5.0, 6.0, 7.0, 100
-                ),
-            )
-        ),
+        "performance": performance,
         "calibration": {
             "status": calibration.status,
             "recommended_threshold": calibration.recommended_threshold,
