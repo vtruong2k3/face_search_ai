@@ -21,6 +21,12 @@ def test_synthetic_benchmark_writes_expected_aggregate_report(tmp_path: Path) ->
     assert report["metrics"]["tp"] == 1
     assert report["metrics"]["fp"] == 0
     assert report["performance"]["vector_search_count"] == 3
+    assert [(item["value"], item["status"], item["query_count"]) for item in report["condition_slices"]] == [
+        ("bright", "available", 2),
+        ("low", "available", 2),
+        ("unused", "suppressed", 0),
+    ]
+    assert report["condition_slices"][2]["points"] == []
     assert report["performance"]["queries_per_second"] == 40.0
     assert report["performance"]["enrollment"]["inference_count"] == 1
     assert report["performance"]["enrollment"]["total_inference_ms"] == 10.0

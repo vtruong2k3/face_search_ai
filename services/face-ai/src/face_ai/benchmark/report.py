@@ -15,6 +15,7 @@ _ALLOWED_FIELDS = {
     "query_count",
     "enrollment_failures",
     "metrics",
+    "condition_slices",
     "performance",
     "calibration",
     "status",

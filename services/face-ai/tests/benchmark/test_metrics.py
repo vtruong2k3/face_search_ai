@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import pytest
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
+from face_ai.benchmark.manifest import ConditionSettings
 from face_ai.benchmark.metrics import (
     Candidate,
     EnrollmentTiming,
     QueryObservation,
     QueryTimings,
     VectorIndexTimings,
+    aggregate_condition_slices,
     aggregate_performance,
     calculate_metrics,
     latency_percentiles,
@@ -25,6 +27,42 @@ def observations() -> tuple[QueryObservation, ...]:
         QueryObservation("q3", None, (Candidate("s4", 0.65),), "ok", timing(30.0)),
         QueryObservation("q4", None, (), "no_face", timing(40.0, vector_search_ms=None)),
     )
+
+
+def test_condition_slices_are_deterministic_and_suppress_sparse_outcomes() -> None:
+    labeled = (
+        QueryObservation("q1", "s1", (Candidate("s1", 0.9),), "ok", timing(10.0), (("lighting", "low"),)),
+        QueryObservation("q2", None, (), "no_face", timing(20.0), (("lighting", "low"),)),
+        QueryObservation("q3", None, (), "no_face", timing(30.0), (("lighting", "bright"),)),
+    )
+    settings = ConditionSettings(
+        2,
+        (("lighting", ("bright", "low", "unused")),),
+    )
+
+    slices = aggregate_condition_slices(
+        labeled,
+        settings=settings,
+        thresholds=(0.8, 0.5),
+        top_k=(1,),
+    )
+
+    assert [(item.dimension, item.value) for item in slices] == [
+        ("lighting", "bright"),
+        ("lighting", "low"),
+        ("lighting", "unused"),
+    ]
+    assert slices[0].status == "suppressed"
+    assert slices[0].query_count == 1
+    assert slices[0].points == ()
+    assert slices[1].status == "available"
+    assert [point.threshold for point in slices[1].points] == [0.5, 0.8]
+    assert slices[1].points[0].query_count == 2
+    assert slices[1].points[0].tp == 1
+    assert slices[1].points[0].tn == 1
+    assert slices[2].status == "suppressed"
+    assert slices[2].query_count == 0
+    assert slices[2].points == ()
 
 
 def test_metrics_use_inclusive_threshold_and_explicit_confusion_semantics() -> None:

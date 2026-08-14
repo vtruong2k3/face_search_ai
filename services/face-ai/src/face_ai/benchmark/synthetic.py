@@ -6,12 +6,14 @@ from typing import Any
 
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
 from face_ai.benchmark.execution_policy import BenchmarkExecution
+from face_ai.benchmark.manifest import ConditionSettings
 from face_ai.benchmark.metrics import (
     Candidate,
     EnrollmentTiming,
     QueryObservation,
     QueryTimings,
     VectorIndexTimings,
+    aggregate_condition_slices,
     aggregate_performance,
     calculate_metrics,
 )
@@ -45,10 +47,10 @@ def _timings(end_to_end_ms: float, *, searched: bool = True) -> QueryTimings:
 
 def synthetic_observations() -> tuple[QueryObservation, ...]:
     return (
-        QueryObservation("query-1", "subject-1", (Candidate("subject-1", 0.9),), "ok", _timings(10.0)),
-        QueryObservation("query-2", "subject-2", (Candidate("subject-3", 0.7), Candidate("subject-2", 0.6)), "ok", _timings(20.0)),
-        QueryObservation("query-3", None, (Candidate("subject-4", 0.65),), "ok", _timings(30.0)),
-        QueryObservation("query-4", None, (), "no_face", _timings(40.0, searched=False)),
+        QueryObservation("query-1", "subject-1", (Candidate("subject-1", 0.9),), "ok", _timings(10.0), (("lighting", "low"),)),
+        QueryObservation("query-2", "subject-2", (Candidate("subject-3", 0.7), Candidate("subject-2", 0.6)), "ok", _timings(20.0), (("lighting", "low"),)),
+        QueryObservation("query-3", None, (Candidate("subject-4", 0.65),), "ok", _timings(30.0), (("lighting", "bright"),)),
+        QueryObservation("query-4", None, (), "no_face", _timings(40.0, searched=False), (("lighting", "bright"),)),
     )
 
 
@@ -92,6 +94,18 @@ def run_synthetic(output: Path) -> dict[str, Any]:
         "query_count": len(observations),
         "enrollment_failures": 0,
         "metrics": asdict(metrics),
+        "condition_slices": [
+            asdict(item)
+            for item in aggregate_condition_slices(
+                observations,
+                settings=ConditionSettings(
+                    2,
+                    (("lighting", ("bright", "low", "unused")),),
+                ),
+                thresholds=(0.7, 0.8),
+                top_k=(1, 2),
+            )
+        ],
         "performance": performance,
         "calibration": {
             "status": calibration.status,

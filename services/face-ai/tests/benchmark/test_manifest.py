@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, Self
 
 import pytest
-
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestError
 
 
@@ -47,6 +46,78 @@ def valid_manifest() -> dict[str, object]:
             },
         ],
     }
+
+
+def test_manifest_accepts_strict_query_conditions_and_fingerprints_assignments() -> None:
+    value = valid_manifest()
+    value["conditions"] = {
+        "minimum_slice_size": 2,
+        "dimensions": {"lighting": ["bright", "low"]},
+    }
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    query = entries[1]
+    assert isinstance(query, dict)
+    query["conditions"] = {"lighting": "low"}
+
+    manifest = BenchmarkManifest.from_dict(value)
+    original_fingerprint = manifest.fingerprint
+
+    assert manifest.conditions.minimum_slice_size == 2
+    assert manifest.conditions.dimensions == (("lighting", ("bright", "low")),)
+    assert manifest.query_entries[0].conditions == (("lighting", "low"),)
+
+    query["conditions"] = {"lighting": "bright"}
+    assert BenchmarkManifest.from_dict(value).fingerprint != original_fingerprint
+
+
+def test_manifest_without_conditions_remains_valid() -> None:
+    manifest = BenchmarkManifest.from_dict(valid_manifest())
+
+    assert manifest.conditions is None
+    assert all(entry.conditions == () for entry in manifest.entries)
+
+
+@pytest.mark.parametrize(
+    ("conditions", "match"),
+    [
+        ({"minimum_slice_size": True, "dimensions": {"lighting": ["low"]}}, "minimum slice size"),
+        ({"minimum_slice_size": 2, "dimensions": {"lighting": []}}, "condition values"),
+        ({"minimum_slice_size": 2, "dimensions": {"lighting": ["low", "low"]}}, "unique"),
+        ({"minimum_slice_size": 2, "dimensions": {"bad label": ["low"]}}, "opaque"),
+    ],
+)
+def test_manifest_rejects_invalid_condition_declarations(
+    conditions: object, match: str
+) -> None:
+    value = valid_manifest()
+    value["conditions"] = conditions
+
+    with pytest.raises(ManifestError, match=match):
+        BenchmarkManifest.from_dict(value)
+
+
+def test_manifest_rejects_undeclared_or_enrollment_conditions() -> None:
+    value = valid_manifest()
+    value["conditions"] = {
+        "minimum_slice_size": 2,
+        "dimensions": {"lighting": ["low"]},
+    }
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    query = entries[1]
+    enrollment = entries[0]
+    assert isinstance(query, dict)
+    assert isinstance(enrollment, dict)
+    query["conditions"] = {"lighting": "bright"}
+
+    with pytest.raises(ManifestError, match="declared condition value"):
+        BenchmarkManifest.from_dict(value)
+
+    query["conditions"] = {"lighting": "low"}
+    enrollment["conditions"] = {"lighting": "low"}
+    with pytest.raises(ManifestError, match="query entries"):
+        BenchmarkManifest.from_dict(value)
 
 
 def test_manifest_loads_strict_json_and_has_stable_fingerprint(tmp_path: Path) -> None:

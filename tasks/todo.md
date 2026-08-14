@@ -34,6 +34,7 @@ Last updated: 2026-08-14
   - [x] Deterministic stage latency and serial-throughput instrumentation
   - [x] Sanitized hardware/runtime reproducibility metadata
   - [x] Process CPU-time and process-lifetime peak-RSS instrumentation
+  - [x] Privacy-safe aggregate condition slicing with sparse suppression
   - [ ] Real threshold recommendation from frozen authorized observations
   - [ ] Record measured CPU latency and throughput
 - [ ] Checkpoint 1: User approves AI quality gate

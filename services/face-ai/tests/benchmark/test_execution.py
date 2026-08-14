@@ -137,6 +137,7 @@ def test_execute_benchmark_writes_deterministic_aggregate_report(tmp_path: Path)
     assert report["query_count"] == 2
     assert report["calibration"]["status"] == "recommended"
     assert report["calibration"]["recommended_threshold"] == 0.5
+    assert report["condition_slices"] == []
     assert [point["threshold"] for point in report["metrics"]] == [0.5, 0.95]
     assert report["reproducibility"]["seed"] == 7
     assert report["reproducibility"]["runtime"]["architecture"] == "test-arch"

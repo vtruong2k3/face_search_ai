@@ -4,6 +4,8 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
+from face_ai.benchmark.manifest import ConditionSettings
+
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
@@ -45,10 +47,17 @@ class QueryObservation:
     candidates: tuple[Candidate, ...]
     status: Literal["ok", "no_face", "ambiguous"]
     timings: QueryTimings
+    conditions: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.query_id.strip():
             raise ValueError("query observation is invalid")
+        ordered_conditions = tuple(sorted(self.conditions))
+        if len(ordered_conditions) != len({dimension for dimension, _ in ordered_conditions}):
+            raise ValueError("query condition dimensions must be unique")
+        if any(not dimension.strip() or not value.strip() for dimension, value in ordered_conditions):
+            raise ValueError("query conditions are invalid")
+        object.__setattr__(self, "conditions", ordered_conditions)
         best: dict[str, Candidate] = {}
         for candidate in self.candidates:
             previous = best.get(candidate.subject_id)
@@ -171,6 +180,53 @@ class MetricResult:
     no_face_rate: float | None
     ambiguous_rate: float | None
     latency_ms: dict[str, float | None]
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionSliceResult:
+    dimension: str
+    value: str
+    query_count: int
+    status: Literal["available", "suppressed"]
+    points: tuple[MetricResult, ...]
+
+
+def aggregate_condition_slices(
+    observations: tuple[QueryObservation, ...],
+    *,
+    settings: ConditionSettings | None,
+    thresholds: tuple[float, ...],
+    top_k: tuple[int, ...],
+) -> tuple[ConditionSliceResult, ...]:
+    if settings is None:
+        return ()
+    results: list[ConditionSliceResult] = []
+    for dimension, values in settings.dimensions:
+        for value in values:
+            selected = tuple(
+                observation
+                for observation in observations
+                if (dimension, value) in observation.conditions
+            )
+            available = len(selected) >= settings.minimum_slice_size
+            points = (
+                tuple(
+                    calculate_metrics(selected, threshold=threshold, top_k=top_k)
+                    for threshold in sorted(set(thresholds))
+                )
+                if available
+                else ()
+            )
+            results.append(
+                ConditionSliceResult(
+                    dimension,
+                    value,
+                    len(selected),
+                    "available" if available else "suppressed",
+                    points,
+                )
+            )
+    return tuple(results)
 
 
 def calculate_metrics(

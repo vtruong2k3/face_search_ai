@@ -8,7 +8,11 @@ from typing import Any
 
 from face_ai.benchmark.calibration import CalibrationPolicy, calibrate
 from face_ai.benchmark.manifest import BenchmarkManifest, ManifestEntry
-from face_ai.benchmark.metrics import aggregate_performance, calculate_metrics
+from face_ai.benchmark.metrics import (
+    aggregate_condition_slices,
+    aggregate_performance,
+    calculate_metrics,
+)
 from face_ai.benchmark.process_resources import (
     ProcessResourceSample,
     resource_evidence,
@@ -80,6 +84,15 @@ def execute_benchmark(
         "query_count": len(result.observations),
         "enrollment_failures": result.enrollment_failures,
         "metrics": [asdict(point) for point in metrics],
+        "condition_slices": [
+            asdict(item)
+            for item in aggregate_condition_slices(
+                result.observations,
+                settings=manifest.conditions,
+                thresholds=manifest.search.thresholds,
+                top_k=manifest.search.top_k,
+            )
+        ],
         "performance": performance_report,
         "calibration": {
             "status": calibration.status,

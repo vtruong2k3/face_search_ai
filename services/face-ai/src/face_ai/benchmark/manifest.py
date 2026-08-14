@@ -47,12 +47,19 @@ class SearchSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionSettings:
+    minimum_slice_size: int
+    dimensions: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ManifestEntry:
     image_id: str
     subject_id: str | None
     path: PurePosixPath
     role: ImageRole
     sha256: str
+    conditions: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +71,7 @@ class BenchmarkManifest:
     model: ModelMetadata
     search: SearchSettings
     entries: tuple[ManifestEntry, ...]
+    conditions: ConditionSettings | None
     fingerprint: str
 
     @property
@@ -85,7 +93,9 @@ class BenchmarkManifest:
     @classmethod
     def from_dict(cls, value: object) -> BenchmarkManifest:
         root = _mapping(value, "manifest")
-        _keys(root, {"benchmark_id", "mode", "seed", "dataset", "model", "search", "entries"}, "manifest")
+        required = {"benchmark_id", "mode", "seed", "dataset", "model", "search", "entries"}
+        if set(root) not in {frozenset(required), frozenset(required | {"conditions"})}:
+            raise ManifestError("manifest has missing or unknown fields")
         dataset_value = _mapping(root["dataset"], "dataset")
         _keys(dataset_value, {"id", "version", "event_id"}, "dataset")
         model_value = _mapping(root["model"], "model")
@@ -103,10 +113,12 @@ class BenchmarkManifest:
         if approval not in {"approved_non_commercial_poc", "approved"}:
             raise ManifestError("model is not approved for benchmarking")
 
+        conditions = _condition_settings(root.get("conditions"))
+        declarations = dict(conditions.dimensions) if conditions else {}
         entries_value = root["entries"]
         if not isinstance(entries_value, list) or not entries_value:
             raise ManifestError("entries must be a non-empty list")
-        entries = tuple(_entry(item) for item in entries_value)
+        entries = tuple(_entry(item, declarations) for item in entries_value)
         image_ids = [entry.image_id for entry in entries]
         paths = [entry.path.as_posix() for entry in entries]
         if len(image_ids) != len(set(image_ids)):
@@ -144,6 +156,7 @@ class BenchmarkManifest:
             ),
             search=SearchSettings(limit=limit, thresholds=tuple(sorted(set(thresholds))), top_k=tuple(sorted(set(top_k)))),
             entries=entries,
+            conditions=conditions,
             fingerprint=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         )
 
@@ -166,9 +179,13 @@ class BenchmarkManifest:
         return candidate
 
 
-def _entry(value: object) -> ManifestEntry:
+def _entry(
+    value: object, declarations: dict[str, tuple[str, ...]]
+) -> ManifestEntry:
     item = _mapping(value, "entry")
-    _keys(item, {"image_id", "subject_id", "path", "role", "sha256"}, "entry")
+    required = {"image_id", "subject_id", "path", "role", "sha256"}
+    if set(item) not in {frozenset(required), frozenset(required | {"conditions"})}:
+        raise ManifestError("entry has missing or unknown fields")
     try:
         role = ImageRole(_text(item["role"], "entry role"))
     except ValueError as exc:
@@ -178,6 +195,17 @@ def _entry(value: object) -> ManifestEntry:
     if path.is_absolute() or ".." in path.parts or "." in path.parts:
         raise ManifestError("image paths must be safe relative paths")
     subject = item["subject_id"]
+    raw_conditions = item.get("conditions", {})
+    condition_map = _mapping(raw_conditions, "entry conditions")
+    if role is ImageRole.ENROLLMENT and condition_map:
+        raise ManifestError("conditions are allowed only on query entries")
+    labels: list[tuple[str, str]] = []
+    for raw_dimension, raw_value in condition_map.items():
+        dimension = _opaque(raw_dimension, "condition dimension")
+        condition_value = _opaque(raw_value, "condition value")
+        if dimension not in declarations or condition_value not in declarations[dimension]:
+            raise ManifestError("entry must use a declared condition value")
+        labels.append((dimension, condition_value))
     if role is ImageRole.ENROLLMENT and subject is None:
         raise ManifestError("enrollment entries require a subject ID")
     return ManifestEntry(
@@ -186,7 +214,29 @@ def _entry(value: object) -> ManifestEntry:
         path=path,
         role=role,
         sha256=_sha256(item["sha256"], "entry checksum"),
+        conditions=tuple(sorted(labels)),
     )
+
+
+def _condition_settings(value: object | None) -> ConditionSettings | None:
+    if value is None:
+        return None
+    item = _mapping(value, "conditions")
+    _keys(item, {"minimum_slice_size", "dimensions"}, "conditions")
+    minimum = _positive_int(item["minimum_slice_size"], "minimum slice size")
+    dimensions_value = _mapping(item["dimensions"], "condition dimensions")
+    if not dimensions_value:
+        raise ManifestError("condition dimensions must be non-empty")
+    dimensions: list[tuple[str, tuple[str, ...]]] = []
+    for raw_dimension, raw_values in dimensions_value.items():
+        dimension = _opaque(raw_dimension, "condition dimension")
+        if not isinstance(raw_values, list) or not raw_values:
+            raise ManifestError("condition values must be a non-empty list")
+        values = tuple(_opaque(item, "condition value") for item in raw_values)
+        if len(values) != len(set(values)):
+            raise ManifestError("condition values must be unique")
+        dimensions.append((dimension, tuple(sorted(values))))
+    return ConditionSettings(minimum, tuple(sorted(dimensions)))
 
 
 def _file_sha256(path: Path) -> str:

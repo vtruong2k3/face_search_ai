@@ -18,6 +18,12 @@
     "thresholds": [0.3, 0.4, 0.5, 0.6, 0.7],
     "top_k": [1, 5, 10]
   },
+  "conditions": {
+    "minimum_slice_size": 5,
+    "dimensions": {
+      "lighting": ["bright", "low"]
+    }
+  },
   "entries": [
     {
       "image_id": "image-enrollment-001",
@@ -31,14 +37,16 @@
       "subject_id": "subject-001",
       "path": "queries/image-001.jpg",
       "role": "query",
-      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "conditions": {"lighting": "bright"}
     },
     {
       "image_id": "image-query-impostor-001",
       "subject_id": null,
       "path": "queries/impostor-001.jpg",
       "role": "query",
-      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "conditions": {"lighting": "low"}
     }
   ]
 }

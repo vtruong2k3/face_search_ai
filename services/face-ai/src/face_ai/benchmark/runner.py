@@ -135,6 +135,7 @@ class BenchmarkRunner:
                             vector_search_ms,
                             elapsed,
                         ),
+                        entry.conditions,
                     )
                 )
         finally:
