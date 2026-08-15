@@ -38,8 +38,8 @@ DO $$
 DECLARE
     expected text[] := ARRAY[
         'audit_records', 'auth_sessions', 'download_records', 'events', 'faces',
-        'organization_memberships', 'organizations', 'outbox_messages', 'photos',
-        'schema_migrations', 'searches', 'users'
+        'organization_memberships', 'organizations', 'outbox_messages', 'photo_upload_sessions',
+        'photos', 'schema_migrations', 'searches', 'users'
     ];
     actual text[];
 BEGIN

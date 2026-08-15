@@ -12,6 +12,7 @@ import (
 	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/domain/photo"
+	"github.com/face-search-ai/api/internal/storage/objectstorage"
 	"github.com/face-search-ai/api/internal/store"
 	"github.com/face-search-ai/api/internal/store/postgres"
 	"github.com/minio/minio-go/v7"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	authorization *authorization.Service
 	events        *event.Service
 	photos        *photo.Service
+	photoUploads  *photo.UploadService
 }
 
 type Status struct {
@@ -56,6 +58,12 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		pool.Close()
 		return nil, fmt.Errorf("minio config: %w", err)
 	}
+	uploadPolicy, err := photo.NewUploadPolicy(cfg.PhotoMaxByteSize, cfg.PhotoUploadPartSize, int(cfg.PhotoUploadMaxParts), cfg.PhotoUploadSignTTL, cfg.PhotoUploadSessionTTL)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("photo upload config: %w", err)
+	}
+	photoRepository := postgres.NewPhotoRepository(pool)
 	return &Dependencies{
 		postgres:   pool,
 		redis:      redis.NewClient(redisOptions),
@@ -67,8 +75,9 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 			postgres.NewAuthorizationRepository(pool),
 			postgres.NewAuditRepository(pool),
 		),
-		events: event.NewService(postgres.NewEventRepository(pool)),
-		photos: photo.NewService(postgres.NewPhotoRepository(pool)),
+		events:       event.NewService(postgres.NewEventRepository(pool)),
+		photos:       photo.NewService(photoRepository),
+		photoUploads: photo.NewUploadService(photoRepository, postgres.NewPhotoUploadRepository(pool), objectstorage.NewMinIO(minioClient, cfg.MinIOBucket), uploadPolicy),
 	}, nil
 }
 
@@ -76,6 +85,7 @@ func (d *Dependencies) AuthService() *auth.Service                   { return d.
 func (d *Dependencies) AuthorizationService() *authorization.Service { return d.authorization }
 func (d *Dependencies) EventService() *event.Service                 { return d.events }
 func (d *Dependencies) PhotoService() *photo.Service                 { return d.photos }
+func (d *Dependencies) PhotoUploadService() *photo.UploadService     { return d.photoUploads }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 func (d *Dependencies) Persistence() interface {

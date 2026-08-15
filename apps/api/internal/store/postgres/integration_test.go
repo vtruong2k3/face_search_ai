@@ -16,7 +16,7 @@ func TestIntegrationTransactionsAndSchema(t *testing.T) {
 		t.Skip("API_POSTGRES_INTEGRATION_URL is not set")
 	}
 	ctx := context.Background()
-	db, err := Open(ctx, databaseURL, 4, 1)
+	db, err := Open(ctx, databaseURL, 4, 2)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

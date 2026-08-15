@@ -29,7 +29,7 @@ func main() {
 	authHandler := handlers.NewAuth(dependencies.AuthService(), cfg.RefreshCookieSecure, cfg.RefreshTokenTTL)
 	organizationsHandler := handlers.NewOrganizations(dependencies.AuthorizationService())
 	eventsHandler := handlers.NewEvents(dependencies.EventService(), dependencies.AuthorizationService())
-	photosHandler := handlers.NewPhotos(dependencies.PhotoService(), dependencies.AuthorizationService())
+	photosHandler := handlers.NewPhotos(dependencies.PhotoService(), dependencies.PhotoUploadService(), dependencies.AuthorizationService())
 	server := &http.Server{
 		Addr: cfg.Address(),
 		Handler: httpserver.NewRouterWithAuth(

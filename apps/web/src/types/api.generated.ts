@@ -247,6 +247,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Initiate or recover a direct multipart upload */
+        post: operations["initiatePhotoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/uploads/parts/{partNumber}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+                partNumber: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign one exact multipart upload part */
+        post: operations["signPhotoUploadPart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/uploads/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete and verify a direct multipart upload */
+        post: operations["completePhotoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/uploads/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Idempotently abort a direct multipart upload */
+        post: operations["abortPhotoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/reprocess": {
         parameters: {
             query?: never;
@@ -384,6 +469,33 @@ export interface components {
             contentType: "image/jpeg" | "image/png" | "image/webp";
             byteSize: number;
             checksumSha256?: string;
+        };
+        MultipartUpload: {
+            /** Format: uuid */
+            photoId: string;
+            uploadId: string;
+            partSize: number;
+            partCount: number;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        UploadReference: {
+            uploadId: string;
+        };
+        SignedUploadPart: {
+            partNumber: number;
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        CompletedUploadPart: {
+            partNumber: number;
+            etag: string;
+        };
+        CompleteMultipartUpload: {
+            uploadId: string;
+            parts: components["schemas"]["CompletedUploadPart"][];
         };
         Photo: {
             /** Format: uuid */
@@ -872,6 +984,124 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    initiatePhotoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active multipart upload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MultipartUpload"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    signPhotoUploadPart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+                partNumber: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadReference"];
+            };
+        };
+        responses: {
+            /** @description Short-lived signed part URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedUploadPart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    completePhotoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteMultipartUpload"];
+            };
+        };
+        responses: {
+            /** @description Verified uploaded Photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    abortPhotoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadReference"];
+            };
+        };
+        responses: {
+            /** @description Upload aborted or already inactive */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["AuthRejected"];
             404: components["responses"]["NotFound"];
         };

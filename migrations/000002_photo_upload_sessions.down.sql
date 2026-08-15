@@ -1,0 +1,2 @@
+DROP TABLE photo_upload_sessions;
+DROP INDEX photos_organization_event_id_idx;

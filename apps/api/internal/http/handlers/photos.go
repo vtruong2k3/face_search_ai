@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/domain/photo"
@@ -10,11 +11,12 @@ import (
 
 type Photos struct {
 	photos        *photo.Service
+	uploads       *photo.UploadService
 	authorization *authorization.Service
 }
 
-func NewPhotos(photos *photo.Service, authorizationService *authorization.Service) *Photos {
-	return &Photos{photos: photos, authorization: authorizationService}
+func NewPhotos(photos *photo.Service, uploads *photo.UploadService, authorizationService *authorization.Service) *Photos {
+	return &Photos{photos: photos, uploads: uploads, authorization: authorizationService}
 }
 
 type createPhotoRequest struct {
@@ -22,6 +24,89 @@ type createPhotoRequest struct {
 	ContentType      string `json:"contentType"`
 	ByteSize         int64  `json:"byteSize"`
 	ChecksumSHA256   string `json:"checksumSha256"`
+}
+
+type completeUploadRequest struct {
+	UploadID string                `json:"uploadId"`
+	Parts    []photo.CompletedPart `json:"parts"`
+}
+
+type uploadRequest struct {
+	UploadID string `json:"uploadId"`
+}
+
+func (h *Photos) InitiateUpload(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.authorize(w, r, authorization.PermissionPhotoWrite, "photo.upload.initiate")
+	if !ok {
+		return
+	}
+	result, err := h.uploads.Initiate(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"))
+	if err != nil {
+		h.writeUnavailable(w)
+		return
+	}
+	h.audit(r, tenant, "photo.upload.initiate", result.PhotoID, authorization.AuditSuccess)
+	writeAuthJSON(w, http.StatusOK, result)
+}
+
+func (h *Photos) SignUploadPart(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.authorize(w, r, authorization.PermissionPhotoWrite, "photo.upload.sign_part")
+	if !ok {
+		return
+	}
+	partNumber, err := strconv.Atoi(r.PathValue("partNumber"))
+	if err != nil {
+		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+		return
+	}
+	var request uploadRequest
+	if err := decodeStrictJSON(r, &request); err != nil {
+		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+		return
+	}
+	result, err := h.uploads.SignPart(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID, partNumber)
+	if err != nil {
+		h.writeUnavailable(w)
+		return
+	}
+	writeAuthJSON(w, http.StatusOK, result)
+}
+
+func (h *Photos) CompleteUpload(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.authorize(w, r, authorization.PermissionPhotoWrite, "photo.upload.complete")
+	if !ok {
+		return
+	}
+	var request completeUploadRequest
+	if err := decodeStrictJSON(r, &request); err != nil {
+		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+		return
+	}
+	result, err := h.uploads.Complete(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID, request.Parts)
+	if err != nil {
+		h.writeUnavailable(w)
+		return
+	}
+	h.audit(r, tenant, "photo.upload.complete", result.ID, authorization.AuditSuccess)
+	writeAuthJSON(w, http.StatusOK, result)
+}
+
+func (h *Photos) AbortUpload(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := h.authorize(w, r, authorization.PermissionPhotoWrite, "photo.upload.abort")
+	if !ok {
+		return
+	}
+	var request uploadRequest
+	if err := decodeStrictJSON(r, &request); err != nil {
+		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+		return
+	}
+	if err := h.uploads.Abort(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID); err != nil {
+		h.writeUnavailable(w)
+		return
+	}
+	h.audit(r, tenant, "photo.upload.abort", r.PathValue("photoId"), authorization.AuditSuccess)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Photos) Create(w http.ResponseWriter, r *http.Request) {

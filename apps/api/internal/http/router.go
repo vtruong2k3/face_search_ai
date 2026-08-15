@@ -52,6 +52,10 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 		mux.Handle("POST "+base, protected(photosHandler.Create))
 		mux.Handle("GET "+base+"/{photoId}", protected(photosHandler.Get))
 		mux.Handle("DELETE "+base+"/{photoId}", protected(photosHandler.Delete))
+		mux.Handle("POST "+base+"/{photoId}/uploads", protected(photosHandler.InitiateUpload))
+		mux.Handle("POST "+base+"/{photoId}/uploads/parts/{partNumber}", protected(photosHandler.SignUploadPart))
+		mux.Handle("POST "+base+"/{photoId}/uploads/complete", protected(photosHandler.CompleteUpload))
+		mux.Handle("POST "+base+"/{photoId}/uploads/abort", protected(photosHandler.AbortUpload))
 		mux.Handle("POST "+base+"/{photoId}/reprocess", protected(photosHandler.Reprocess))
 	}
 	return middleware.CORS(webOrigin, middleware.RequestID(middleware.RequestLog(mux)))
