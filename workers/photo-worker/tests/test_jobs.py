@@ -1,5 +1,7 @@
 import json
+
 import pytest
+
 from photo_worker.jobs import JobEnvelope, PhotoProcessingPayload
 
 

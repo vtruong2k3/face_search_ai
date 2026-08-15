@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any
+
 import pytest
 
 from photo_worker.consumer import WorkerConsumer

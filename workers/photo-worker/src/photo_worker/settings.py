@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_file=".env")
 
+    # Redis config
     redis_url: str = "redis://localhost:6379/0"
     redis_stream: str = "photo-jobs"
     redis_group: str = "photo-workers"
@@ -16,3 +19,19 @@ class Settings(BaseSettings):
     max_retries: int = 3
     claim_min_idle_ms: int = 30000
     claim_interval_s: float = 15.0
+
+    # MinIO config
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_secure: bool = False
+    minio_bucket: str = "face-search"
+
+    # Image Derivative Limits
+    thumbnail_max_size: int = 400
+    thumbnail_quality: int = 80
+    preview_max_size: int = 1600
+    preview_quality: int = 85
+    max_image_bytes: int = 100 * 1024 * 1024
+    max_image_pixels: int = 80_000_000
+    max_image_dimension: int = 12_000

@@ -1,5 +1,6 @@
 import json
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -18,7 +19,7 @@ class JobEnvelope(BaseModel):
     payload: PhotoProcessingPayload | dict[str, Any]
 
     @classmethod
-    def from_stream(cls, fields: dict[bytes | str, bytes | str]) -> "JobEnvelope":
+    def from_stream(cls, fields: dict[Any, Any]) -> "JobEnvelope":
         # Normalize fields to string keys
         norm: dict[str, Any] = {}
         for k, v in fields.items():

@@ -1,5 +1,6 @@
 import asyncio
 import signal
+
 import redis.asyncio as redis
 import structlog
 
