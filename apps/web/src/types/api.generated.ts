@@ -142,6 +142,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations/{organizationId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        /** List active Events in an organization */
+        get: operations["listEvents"];
+        put?: never;
+        /** Create an Event */
+        post: operations["createEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        /** Get an Event */
+        get: operations["getEvent"];
+        put?: never;
+        post?: never;
+        /** Archive an Event */
+        delete: operations["archiveEvent"];
+        options?: never;
+        head?: never;
+        /** Update mutable Event settings */
+        patch: operations["updateEvent"];
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        /** Get trusted Event photo processing counters */
+        get: operations["getEventStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -171,6 +233,59 @@ export interface components {
             organizationName: string;
             /** @enum {string} */
             role: "owner" | "admin" | "editor" | "viewer";
+        };
+        /** @enum {string} */
+        EventVisibility: "private" | "public";
+        CreateEvent: {
+            name: string;
+            visibility: components["schemas"]["EventVisibility"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+            downloadsEnabled: boolean;
+            /** @description Optional cosine-similarity policy override; no production default is approved. */
+            matchThreshold?: number | null;
+        };
+        UpdateEvent: {
+            name?: string;
+            visibility?: components["schemas"]["EventVisibility"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+            downloadsEnabled?: boolean;
+            /** @description Optional cosine-similarity policy override; no production default is approved. */
+            matchThreshold?: number | null;
+        };
+        Event: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            visibility: components["schemas"]["EventVisibility"];
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date-time */
+            expiresAt: string | null;
+            downloadsEnabled: boolean;
+            matchThreshold: number | null;
+            /** Format: uuid */
+            createdByUserId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EventProcessingStatus: {
+            /** Format: uuid */
+            eventId: string;
+            activeTotal: number;
+            pending: number;
+            uploading: number;
+            uploaded: number;
+            queued: number;
+            processing: number;
+            ready: number;
+            failed: number;
+            deleted: number;
         };
         AuthResponse: {
             accessToken: string;
@@ -224,7 +339,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        OrganizationId: string;
+        EventId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -378,6 +496,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationMembership"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active Events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"][];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEvent"];
+            };
+        };
+        responses: {
+            /** @description Event created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    archiveEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event archived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEvent"];
+            };
+        };
+        responses: {
+            /** @description Event updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getEventStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event processing counters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventProcessingStatus"];
                 };
             };
             401: components["responses"]["AuthRejected"];

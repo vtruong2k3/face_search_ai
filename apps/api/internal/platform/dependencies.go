@@ -10,6 +10,7 @@ import (
 	"github.com/face-search-ai/api/internal/config"
 	"github.com/face-search-ai/api/internal/domain/auth"
 	"github.com/face-search-ai/api/internal/domain/authorization"
+	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/store"
 	"github.com/face-search-ai/api/internal/store/postgres"
 	"github.com/minio/minio-go/v7"
@@ -25,6 +26,7 @@ type Dependencies struct {
 	httpClient    *http.Client
 	auth          *auth.Service
 	authorization *authorization.Service
+	events        *event.Service
 }
 
 type Status struct {
@@ -63,11 +65,13 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 			postgres.NewAuthorizationRepository(pool),
 			postgres.NewAuditRepository(pool),
 		),
+		events: event.NewService(postgres.NewEventRepository(pool)),
 	}, nil
 }
 
 func (d *Dependencies) AuthService() *auth.Service                   { return d.auth }
 func (d *Dependencies) AuthorizationService() *authorization.Service { return d.authorization }
+func (d *Dependencies) EventService() *event.Service                 { return d.events }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 func (d *Dependencies) Persistence() interface {

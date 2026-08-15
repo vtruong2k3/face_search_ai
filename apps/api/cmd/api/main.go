@@ -28,6 +28,7 @@ func main() {
 	defer dependencies.Close()
 	authHandler := handlers.NewAuth(dependencies.AuthService(), cfg.RefreshCookieSecure, cfg.RefreshTokenTTL)
 	organizationsHandler := handlers.NewOrganizations(dependencies.AuthorizationService())
+	eventsHandler := handlers.NewEvents(dependencies.EventService(), dependencies.AuthorizationService())
 	server := &http.Server{
 		Addr: cfg.Address(),
 		Handler: httpserver.NewRouterWithAuth(
@@ -35,6 +36,7 @@ func main() {
 			authHandler,
 			dependencies.AuthService(),
 			organizationsHandler,
+			eventsHandler,
 			cfg.WebOrigin,
 		),
 		ReadHeaderTimeout: 5 * time.Second,
