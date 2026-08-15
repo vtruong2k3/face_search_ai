@@ -29,7 +29,13 @@ make migrate-version
 docker compose up --build
 ```
 
-`make migrate-down` deliberately refuses to alter the normal development database. Use `make migrate-verify` to run the complete up/down/up cycle against an isolated Compose project and disposable PostgreSQL volume. Use `make api-store-verify` to apply the same migration to another isolated project and run the real Go persistence integration suite, including commit, rollback, constraint mapping, and schema readiness. Both verifications always remove their projects and volumes; neither touches the normal `postgres-data` volume.
+`make migrate-down` deliberately refuses to alter the normal development database. Use `make migrate-verify` to run the complete up/down/up cycle against an isolated Compose project and disposable PostgreSQL volume. Use `make api-store-verify` to apply the same migration to another isolated project and run the real Go persistence integration suite, including auth password/refresh hashing, duplicate registration rollback, refresh rotation/replay rejection, expiry, revocation, transaction behavior, constraint mapping, and schema readiness. Both verifications always remove their projects and volumes; neither touches the normal `postgres-data` volume.
+
+## Authentication development
+
+Set `AUTH_SIGNING_KEY` to at least 32 unpredictable bytes in the ignored `.env`; never use the example placeholder outside local configuration setup. `AUTH_ISSUER`, `AUTH_AUDIENCE`, access/refresh TTLs, `WEB_ORIGIN`, and `REFRESH_COOKIE_SECURE` configure token validation and the credentialed browser boundary. Set secure cookies to true when served over HTTPS.
+
+The browser keeps access tokens in React memory only. It performs one refresh-cookie request during session restoration; tokens must not be added to localStorage, sessionStorage, URLs, or logs. Refresh and logout use a cookie scoped to `/api/v1/auth`, and credentialed CORS accepts only `WEB_ORIGIN`. Tenant roles and permissions are intentionally deferred to Task 2.4.
 
 For a genuinely fresh local deployment, first confirm no needed local data exists, then explicitly remove the normal volumes:
 

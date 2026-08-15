@@ -14,7 +14,8 @@ Face AI PoC -> Qdrant (internal benchmark collections)
 - Go API will own public contracts, tenancy, permissions and orchestration.
 - Face AI will own model loading and inference only.
 - Photo worker will own asynchronous image processing.
-- PostgreSQL has a versioned tenant-safe MVP schema and Compose migration gate. The Go API now owns a pgx-backed store boundary with transaction orchestration, sanitized persistence errors, bounded pooling, and migration-version readiness checks; schema mutation remains owned by the external migration service.
+- PostgreSQL has a versioned tenant-safe MVP schema and Compose migration gate. The Go API owns a pgx-backed store boundary with transaction orchestration, sanitized persistence errors, bounded pooling, and migration-version readiness checks; schema mutation remains owned by the external migration service.
+- Authentication supports registration, login, atomic opaque refresh-token rotation, logout, and current-user lookup. Passwords use Argon2id, only refresh-token hashes are persisted, access tokens are short-lived HS256 JWTs, and browser refresh tokens use scoped HttpOnly SameSite cookies. Tenant roles and permissions remain the Task 2.4 boundary.
 - Redis and MinIO are configured dependencies; Compose initializes the MinIO bucket, while application job, object, and production Qdrant integrations remain pending.
 - The Face AI PoC has a benchmark-only Qdrant adapter. It creates dedicated collections, stores opaque face/photo and dataset/Event scope identifiers, and requires both scope filters on every search. It is not the production multi-tenant vector adapter.
 

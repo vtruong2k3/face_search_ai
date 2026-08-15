@@ -1,6 +1,6 @@
 # Face Search AI — Task Status
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Phase 0 — Governance
 
@@ -45,7 +45,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 - [x] Task 2.1: Harden infrastructure and add migrations (versioned reversible MVP schema; database-enforced tenant integrity/state/idempotency; Compose migration and MinIO initialization gates; disposable up/down/up verification)
 - [x] Task 2.2: Add Go persistence boundaries (bounded pgx pool; DBTX and transaction ports; rollback guarantees; sanitized error mapping; exact migration-version readiness; disposable PostgreSQL integration verification)
-- [ ] Task 2.3: Implement authentication slice
+- [x] Task 2.3: Implement authentication slice (Argon2id registration/login; short-lived in-memory access tokens; hashed opaque refresh-token rotation/replay rejection; scoped HttpOnly cookies; current-user/logout API and minimal Next.js UI; disposable PostgreSQL, HTTP security, and web tests)
 - [ ] Task 2.4: Implement tenant authorization foundation
 - [ ] Checkpoint 2: Auth and tenant isolation
 

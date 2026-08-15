@@ -1,6 +1,6 @@
 # Face Search AI
 
-Bộ khung monorepo cho Face Search AI gồm các service độc lập, AI PoC chạy cục bộ và nền tảng PostgreSQL có migration theo phiên bản. Authentication, Event, upload, xử lý nền, persistence của Go API và các luồng MVP vẫn đang được triển khai.
+Bộ khung monorepo cho Face Search AI gồm các service độc lập, AI PoC chạy cục bộ, nền tảng PostgreSQL có migration theo phiên bản và authentication end-to-end. Event, upload, xử lý nền và các luồng MVP còn lại vẫn đang được triển khai.
 
 ## Cấu trúc
 
@@ -58,11 +58,13 @@ docker compose config
 - Compose tự chạy migration và tạo MinIO bucket theo cách idempotent trước khi khởi động API
 - `make migrate-verify` kiểm tra up/down/up trên volume PostgreSQL tách biệt và dùng một lần
 - Ranh giới persistence của Go API với pgx pool giới hạn, transaction bảo đảm rollback, lỗi cơ sở dữ liệu được làm sạch và kiểm tra phiên bản migration khi readiness
+- Authentication contract và UI cho registration, login, current user, refresh-token rotation và logout
+- Argon2id password hashing, access token ngắn hạn trong browser memory và opaque refresh cookie HttpOnly; PostgreSQL chỉ lưu refresh-token hash
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai
 
-- Authentication và authorization
+- Tenant roles, permissions và authorization middleware
 - Signed upload/MinIO application integration
 - Production Redis job consumption and orchestration
 - Production multi-tenant Qdrant collections and vector search
