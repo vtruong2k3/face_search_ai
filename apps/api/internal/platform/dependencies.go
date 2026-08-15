@@ -21,16 +21,17 @@ import (
 )
 
 type Dependencies struct {
-	postgres      *postgres.Store
-	redis         *redis.Client
-	minio         *minio.Client
-	cfg           config.Config
-	httpClient    *http.Client
-	auth          *auth.Service
-	authorization *authorization.Service
-	events        *event.Service
-	photos        *photo.Service
-	photoUploads  *photo.UploadService
+	postgres         *postgres.Store
+	redis            *redis.Client
+	minio            *minio.Client
+	cfg              config.Config
+	httpClient       *http.Client
+	auth             *auth.Service
+	authorization    *authorization.Service
+	events           *event.Service
+	photos           *photo.Service
+	photoUploads     *photo.UploadService
+	outboxPublisher  *outboxPublisher
 }
 
 type Status struct {
@@ -64,9 +65,17 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		return nil, fmt.Errorf("photo upload config: %w", err)
 	}
 	photoRepository := postgres.NewPhotoRepository(pool)
+	redisClient := redis.NewClient(redisOptions)
+	outboxRepo := postgres.NewOutboxRepository(pool)
+	outboxCfg := OutboxPublisherConfig{
+		StreamName:   cfg.OutboxStreamName,
+		PollInterval: cfg.OutboxPollInterval,
+		BatchSize:    cfg.OutboxBatchSize,
+		LeaseTTL:     cfg.OutboxLeaseTTL,
+	}
 	return &Dependencies{
 		postgres:   pool,
-		redis:      redis.NewClient(redisOptions),
+		redis:      redisClient,
 		minio:      minioClient,
 		cfg:        cfg,
 		httpClient: &http.Client{Timeout: cfg.DependencyTimeout},
@@ -75,9 +84,10 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 			postgres.NewAuthorizationRepository(pool),
 			postgres.NewAuditRepository(pool),
 		),
-		events:       event.NewService(postgres.NewEventRepository(pool)),
-		photos:       photo.NewService(photoRepository),
-		photoUploads: photo.NewUploadService(photoRepository, postgres.NewPhotoUploadRepository(pool), objectstorage.NewMinIO(minioClient, cfg.MinIOBucket), uploadPolicy),
+		events:          event.NewService(postgres.NewEventRepository(pool)),
+		photos:          photo.NewService(photoRepository),
+		photoUploads:    photo.NewUploadService(photoRepository, postgres.NewPhotoUploadRepository(pool), objectstorage.NewMinIO(minioClient, cfg.MinIOBucket), uploadPolicy),
+		outboxPublisher: newOutboxPublisher(outboxRepo, redisClient, outboxCfg),
 	}, nil
 }
 
@@ -87,6 +97,12 @@ func (d *Dependencies) EventService() *event.Service                 { return d.
 func (d *Dependencies) PhotoService() *photo.Service                 { return d.photos }
 func (d *Dependencies) PhotoUploadService() *photo.UploadService     { return d.photoUploads }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
+
+// RunOutboxPublisher starts the outbox polling loop. Call from main in a goroutine;
+// it blocks until ctx is cancelled.
+func (d *Dependencies) RunOutboxPublisher(ctx context.Context) {
+	d.outboxPublisher.Run(ctx)
+}
 
 func (d *Dependencies) Persistence() interface {
 	store.DBTX

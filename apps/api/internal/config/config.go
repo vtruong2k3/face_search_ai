@@ -33,6 +33,10 @@ type Config struct {
 	RefreshTokenTTL       time.Duration
 	RefreshCookieSecure   bool
 	WebOrigin             string
+	OutboxStreamName      string
+	OutboxPollInterval    time.Duration
+	OutboxBatchSize       int
+	OutboxLeaseTTL        time.Duration
 }
 
 func Load() Config {
@@ -41,7 +45,7 @@ func Load() Config {
 		Port:                  valueOrDefault("API_PORT", "8080"),
 		DatabaseURL:           valueOrDefault("DATABASE_URL", "postgres://face_search:face_search@localhost:5432/face_search?sslmode=disable"),
 		DatabaseMaxConns:      int32Value("DATABASE_MAX_CONNECTIONS", 10),
-		SchemaVersion:         int64Value("DATABASE_SCHEMA_VERSION", 2),
+		SchemaVersion:         int64Value("DATABASE_SCHEMA_VERSION", 3),
 		RedisURL:              valueOrDefault("REDIS_URL", "redis://localhost:6379/0"),
 		QdrantURL:             valueOrDefault("QDRANT_URL", "http://localhost:6333"),
 		MinIOEndpoint:         valueOrDefault("MINIO_ENDPOINT", "localhost:9000"),
@@ -63,6 +67,10 @@ func Load() Config {
 		RefreshTokenTTL:       durationValue("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		RefreshCookieSecure:   boolValue("REFRESH_COOKIE_SECURE", false),
 		WebOrigin:             valueOrDefault("WEB_ORIGIN", "http://localhost:3000"),
+		OutboxStreamName:      valueOrDefault("REDIS_STREAM", "photo-jobs"),
+		OutboxPollInterval:    boundedDurationValue("OUTBOX_POLL_INTERVAL", 2*time.Second, 500*time.Millisecond, time.Minute),
+		OutboxBatchSize:       int(boundedInt64Value("OUTBOX_BATCH_SIZE", 50, 1, 500)),
+		OutboxLeaseTTL:        boundedDurationValue("OUTBOX_LEASE_TTL", 30*time.Second, 5*time.Second, 5*time.Minute),
 	}
 }
 

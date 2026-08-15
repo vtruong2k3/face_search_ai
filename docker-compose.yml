@@ -15,7 +15,7 @@ services:
       API_PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-10}
-      DATABASE_SCHEMA_VERSION: ${DATABASE_SCHEMA_VERSION:-2}
+      DATABASE_SCHEMA_VERSION: ${DATABASE_SCHEMA_VERSION:-3}
       AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY}
       AUTH_ISSUER: ${AUTH_ISSUER:-face-search-api}
       AUTH_AUDIENCE: ${AUTH_AUDIENCE:-face-search-web}
@@ -38,6 +38,9 @@ services:
       REDIS_STREAM: ${REDIS_STREAM:-photo-jobs}
       REDIS_GROUP: ${REDIS_GROUP:-photo-workers}
       DEAD_LETTER_STREAM: ${DEAD_LETTER_STREAM:-photo-jobs-dlq}
+      OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL:-2s}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      OUTBOX_LEASE_TTL: ${OUTBOX_LEASE_TTL:-30s}
     depends_on:
       postgres: { condition: service_healthy }
       migrations: { condition: service_completed_successfully }

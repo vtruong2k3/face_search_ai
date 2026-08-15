@@ -50,6 +50,7 @@ func main() {
 			stop()
 		}
 	}()
+	go dependencies.RunOutboxPublisher(ctx)
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

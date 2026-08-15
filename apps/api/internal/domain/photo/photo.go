@@ -27,19 +27,44 @@ const (
 )
 
 type Photo struct {
-	ID               string
-	OrganizationID   string
-	EventID          string
-	ObjectKey        string
-	OriginalFilename string
-	ContentType      string
-	ByteSize         int64
-	ChecksumSHA256   string
-	Status           Status
-	FailureCode      string
-	CreatedByUserID  string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                   string
+	OrganizationID       string
+	EventID              string
+	ObjectKey            string
+	OriginalFilename     string
+	ContentType          string
+	ByteSize             int64
+	ChecksumSHA256       string
+	Status               Status
+	FailureCode          string
+	ProcessingGeneration int
+	CreatedByUserID      string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+// IdempotencyKey returns the deterministic outbox key for the current processing generation.
+func (p Photo) IdempotencyKey() string {
+	return "photo.process:" + p.ID + ":" + itoa(p.ProcessingGeneration)
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	buf := make([]byte, 0, 10)
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	for n > 0 {
+		buf = append([]byte{byte('0' + n%10)}, buf...)
+		n /= 10
+	}
+	if neg {
+		buf = append([]byte{'-'}, buf...)
+	}
+	return string(buf)
 }
 
 type View struct {
@@ -76,6 +101,9 @@ type Repository interface {
 	List(context.Context, string, string) ([]Photo, error)
 	Find(context.Context, string, string, string) (Photo, error)
 	Delete(context.Context, string, string, string) error
+	// Reprocess transitions a failed photo to queued, increments processing_generation,
+	// and inserts a versioned outbox message atomically. Idempotent: returns ErrConflict
+	// if the photo is not in the failed state.
 	Reprocess(context.Context, string, string, string) (Photo, error)
 }
 

@@ -42,8 +42,15 @@ func (p UploadPolicy) ValidatePart(partNumber int) error {
 
 type UploadSessionRepository interface {
 	FindActive(context.Context, string, string, string, time.Time) (UploadSession, bool, error)
+	// FindForCompletion returns an active session (for first-time completion) or a completed
+	// session paired with a queued/processing/ready photo (for idempotent replay).
+	// The second return value is false when neither condition is satisfied.
+	FindForCompletion(context.Context, string, string, string, string, time.Time) (UploadSession, bool, error)
 	Create(context.Context, string, string, string, string, time.Time) (UploadSession, error)
-	MarkCompleted(context.Context, string, string, string, string) error
+	// FinalizeCompleted atomically marks the session completed, transitions the photo to
+	// queued, and inserts a versioned outbox message with ON CONFLICT DO NOTHING.
+	// Returns the persisted photo including its processing_generation.
+	FinalizeCompleted(context.Context, string, string, string, string) (Photo, error)
 	MarkAborted(context.Context, string, string, string, string) error
 }
 
@@ -131,12 +138,21 @@ func (s *UploadService) Complete(ctx context.Context, organizationID, eventID, p
 	if err != nil {
 		return View{}, err
 	}
-	session, found, err := s.sessions.FindActive(ctx, organizationID, eventID, photoID, s.now())
+	session, found, err := s.sessions.FindForCompletion(ctx, organizationID, eventID, photoID, uploadID, s.now())
 	if err != nil {
 		return View{}, err
 	}
-	if !found || session.UploadID != uploadID {
+	if !found {
 		return View{}, ErrInvalid
+	}
+	// Replay path: session already completed means photo is already queued.
+	// Return the current photo state without re-completing MinIO or re-inserting outbox.
+	if session.Status == UploadSessionCompleted {
+		item, findErr := s.photos.Find(ctx, organizationID, eventID, photoID)
+		if findErr != nil {
+			return View{}, findErr
+		}
+		return item.View(), nil
 	}
 	item, err := s.photos.Find(ctx, organizationID, eventID, photoID)
 	if err != nil || len(parts) != s.policy.PartCount(item.ByteSize) {
@@ -149,11 +165,11 @@ func (s *UploadService) Complete(ctx context.Context, organizationID, eventID, p
 	if err != nil || stored.ByteSize != item.ByteSize || stored.ContentType != item.ContentType || item.ChecksumSHA256 != "" && stored.ChecksumSHA256 != item.ChecksumSHA256 {
 		return View{}, ErrInvalid
 	}
-	if err := s.sessions.MarkCompleted(ctx, organizationID, eventID, photoID, uploadID); err != nil {
+	finalized, err := s.sessions.FinalizeCompleted(ctx, organizationID, eventID, photoID, uploadID)
+	if err != nil {
 		return View{}, err
 	}
-	item.Status = StatusUploaded
-	return item.View(), nil
+	return finalized.View(), nil
 }
 
 func (s *UploadService) Abort(ctx context.Context, organizationID, eventID, photoID, uploadID string) error {

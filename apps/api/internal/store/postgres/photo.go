@@ -29,12 +29,13 @@ func (r *PhotoRepository) Create(ctx context.Context, params photo.CreateParams)
 		FROM trusted
 		RETURNING id, organization_id, event_id, object_key, original_filename,
 			content_type, byte_size, coalesce(checksum_sha256, ''), status,
-			coalesce(failure_code, ''), created_by_user_id, created_at, updated_at`,
+			coalesce(failure_code, ''), processing_generation, created_by_user_id, created_at, updated_at`,
 		params.OrganizationID, params.EventID, params.OriginalFilename, params.ContentType,
 		params.ByteSize, params.ChecksumSHA256, params.CreatedByUserID,
 	).Scan(&result.ID, &result.OrganizationID, &result.EventID, &result.ObjectKey,
 		&result.OriginalFilename, &result.ContentType, &result.ByteSize, &result.ChecksumSHA256,
-		&result.Status, &result.FailureCode, &result.CreatedByUserID, &result.CreatedAt, &result.UpdatedAt)
+		&result.Status, &result.FailureCode, &result.ProcessingGeneration,
+		&result.CreatedByUserID, &result.CreatedAt, &result.UpdatedAt)
 	if err != nil {
 		return photo.Photo{}, MapError(err)
 	}
@@ -45,7 +46,8 @@ func (r *PhotoRepository) List(ctx context.Context, organizationID, eventID stri
 	rows, err := r.db.Query(ctx, `
 		SELECT p.id, p.organization_id, p.event_id, p.object_key, coalesce(p.original_filename, ''),
 			coalesce(p.content_type, ''), coalesce(p.byte_size, 0), coalesce(p.checksum_sha256, ''),
-			p.status, coalesce(p.failure_code, ''), p.created_by_user_id, p.created_at, p.updated_at
+			p.status, coalesce(p.failure_code, ''), p.processing_generation,
+			p.created_by_user_id, p.created_at, p.updated_at
 		FROM photos p JOIN events e ON e.organization_id = p.organization_id AND e.id = p.event_id
 		WHERE p.organization_id = $1 AND p.event_id = $2 AND p.status <> 'deleted' AND e.status = 'active'
 		ORDER BY p.created_at DESC, p.id`, organizationID, eventID)
@@ -71,7 +73,8 @@ func (r *PhotoRepository) Find(ctx context.Context, organizationID, eventID, pho
 	return queryPhoto(ctx, r.db, `
 		SELECT p.id, p.organization_id, p.event_id, p.object_key, coalesce(p.original_filename, ''),
 			coalesce(p.content_type, ''), coalesce(p.byte_size, 0), coalesce(p.checksum_sha256, ''),
-			p.status, coalesce(p.failure_code, ''), p.created_by_user_id, p.created_at, p.updated_at
+			p.status, coalesce(p.failure_code, ''), p.processing_generation,
+			p.created_by_user_id, p.created_at, p.updated_at
 		FROM photos p JOIN events e ON e.organization_id = p.organization_id AND e.id = p.event_id
 		WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3
 			AND p.status <> 'deleted' AND e.status = 'active'`, organizationID, eventID, photoID)
@@ -93,16 +96,55 @@ func (r *PhotoRepository) Delete(ctx context.Context, organizationID, eventID, p
 	return nil
 }
 
+// Reprocess atomically transitions a failed photo to queued, increments processing_generation,
+// and inserts a versioned outbox message. ON CONFLICT DO NOTHING makes it idempotent.
 func (r *PhotoRepository) Reprocess(ctx context.Context, organizationID, eventID, photoID string) (photo.Photo, error) {
-	return queryPhoto(ctx, r.db, `
-		UPDATE photos p SET status = 'queued', failure_code = NULL, updated_at = now()
-		FROM events e
-		WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3 AND p.status = 'failed'
-			AND e.organization_id = p.organization_id AND e.id = p.event_id AND e.status = 'active'
-		RETURNING p.id, p.organization_id, p.event_id, p.object_key, coalesce(p.original_filename, ''),
-			coalesce(p.content_type, ''), coalesce(p.byte_size, 0), coalesce(p.checksum_sha256, ''),
-			p.status, coalesce(p.failure_code, ''), p.created_by_user_id, p.created_at, p.updated_at`,
-		organizationID, eventID, photoID)
+	var result photo.Photo
+	err := r.db.WithinTransaction(ctx, func(ctx context.Context, tx store.DBTX) error {
+		err := tx.QueryRow(ctx, `
+			UPDATE photos p SET status = 'queued', failure_code = NULL,
+				processing_generation = processing_generation + 1, updated_at = now()
+			FROM events e
+			WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3 AND p.status = 'failed'
+				AND e.organization_id = p.organization_id AND e.id = p.event_id AND e.status = 'active'
+			RETURNING p.id, p.organization_id, p.event_id, p.object_key, coalesce(p.original_filename, ''),
+				coalesce(p.content_type, ''), coalesce(p.byte_size, 0), coalesce(p.checksum_sha256, ''),
+				p.status, coalesce(p.failure_code, ''), p.processing_generation,
+				p.created_by_user_id, p.created_at, p.updated_at`,
+			organizationID, eventID, photoID,
+		).Scan(&result.ID, &result.OrganizationID, &result.EventID, &result.ObjectKey,
+			&result.OriginalFilename, &result.ContentType, &result.ByteSize, &result.ChecksumSHA256,
+			&result.Status, &result.FailureCode, &result.ProcessingGeneration,
+			&result.CreatedByUserID, &result.CreatedAt, &result.UpdatedAt)
+		if err != nil {
+			return MapError(err)
+		}
+		idempotencyKey := result.IdempotencyKey()
+		_, err = tx.Exec(ctx, `
+			INSERT INTO outbox_messages (
+				organization_id, aggregate_type, aggregate_id, event_type,
+				payload, idempotency_key
+			) VALUES (
+				$1, 'photo', $2, 'photo.processing.requested',
+				jsonb_build_object(
+					'photoId', $2::text,
+					'organizationId', $1::text,
+					'eventId', $3::text,
+					'objectKey', $4::text,
+					'processingGeneration', $5::int
+				),
+				$6
+			) ON CONFLICT (organization_id, idempotency_key) DO NOTHING`,
+			organizationID, photoID, eventID, result.ObjectKey, result.ProcessingGeneration, idempotencyKey)
+		if err != nil {
+			return MapError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return photo.Photo{}, err
+	}
+	return result, nil
 }
 
 type photoScanner interface{ Scan(...any) error }
@@ -111,7 +153,8 @@ func scanPhoto(row photoScanner) (photo.Photo, error) {
 	var result photo.Photo
 	if err := row.Scan(&result.ID, &result.OrganizationID, &result.EventID, &result.ObjectKey,
 		&result.OriginalFilename, &result.ContentType, &result.ByteSize, &result.ChecksumSHA256,
-		&result.Status, &result.FailureCode, &result.CreatedByUserID, &result.CreatedAt, &result.UpdatedAt); err != nil {
+		&result.Status, &result.FailureCode, &result.ProcessingGeneration,
+		&result.CreatedByUserID, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return photo.Photo{}, MapError(err)
 	}
 	return result, nil

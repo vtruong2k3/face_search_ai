@@ -11,11 +11,13 @@ type fakeUploadSessions struct {
 	session       UploadSession
 	found         bool
 	createdUpload string
-	completed     bool
+	finalized     bool
 	aborted       bool
 	createErr     error
 	findCalls     int
 	findAfterErr  UploadSession
+	finalizePhoto Photo
+	finalizeErr   error
 }
 
 func (f *fakeUploadSessions) FindActive(context.Context, string, string, string, time.Time) (UploadSession, bool, error) {
@@ -23,6 +25,9 @@ func (f *fakeUploadSessions) FindActive(context.Context, string, string, string,
 	if f.createErr != nil && f.findCalls > 1 && f.findAfterErr.UploadID != "" {
 		return f.findAfterErr, true, nil
 	}
+	return f.session, f.found, nil
+}
+func (f *fakeUploadSessions) FindForCompletion(_ context.Context, _, _, _, _ string, _ time.Time) (UploadSession, bool, error) {
 	return f.session, f.found, nil
 }
 func (f *fakeUploadSessions) Create(_ context.Context, organizationID, eventID, photoID, uploadID string, expiresAt time.Time) (UploadSession, error) {
@@ -34,9 +39,14 @@ func (f *fakeUploadSessions) Create(_ context.Context, organizationID, eventID, 
 	f.found = true
 	return f.session, nil
 }
-func (f *fakeUploadSessions) MarkCompleted(context.Context, string, string, string, string) error {
-	f.completed = true
-	return nil
+func (f *fakeUploadSessions) FinalizeCompleted(context.Context, string, string, string, string) (Photo, error) {
+	f.finalized = true
+	if f.finalizeErr != nil {
+		return Photo{}, f.finalizeErr
+	}
+	result := f.finalizePhoto
+	result.Status = StatusQueued
+	return result, nil
 }
 func (f *fakeUploadSessions) MarkAborted(context.Context, string, string, string, string) error {
 	f.aborted = true
@@ -110,12 +120,42 @@ func TestInitiateUploadReusesConcurrentSession(t *testing.T) {
 	}
 }
 
+func TestCompleteUploadFinalizesAtomically(t *testing.T) {
+	session := UploadSession{UploadID: "upload-1", Status: UploadSessionActive, ExpiresAt: time.Now().Add(time.Hour)}
+	finalPhoto := Photo{ID: "photo-1", OrganizationID: "org-1", EventID: "event-1", Status: StatusQueued, ProcessingGeneration: 1}
+	sessions := &fakeUploadSessions{found: true, session: session, finalizePhoto: finalPhoto}
+	storage := &fakeMultipartStorage{stored: StoredObject{ByteSize: 9 * 1024 * 1024, ContentType: "image/jpeg"}}
+	view, err := uploadTestService(t, sessions, storage).Complete(context.Background(), "org-1", "event-1", "photo-1", "upload-1", []CompletedPart{{PartNumber: 1, ETag: "etag-1"}, {PartNumber: 2, ETag: "etag-2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Status != StatusQueued || !sessions.finalized {
+		t.Fatalf("status=%v finalized=%v", view.Status, sessions.finalized)
+	}
+}
+
+func TestCompleteUploadReplayReturnsSameState(t *testing.T) {
+	// Completed session + photo already queued → replay path skips MinIO re-completion.
+	session := UploadSession{UploadID: "upload-1", Status: UploadSessionCompleted}
+	sessions := &fakeUploadSessions{found: true, session: session}
+	storage := &fakeMultipartStorage{}
+	// fakeRepository returns a queued photo
+	view, err := uploadTestService(t, sessions, storage).Complete(context.Background(), "org-1", "event-1", "photo-1", "upload-1", []CompletedPart{{PartNumber: 1, ETag: "etag-1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storage.completed != 0 || sessions.finalized {
+		t.Fatalf("replay should skip MinIO and FinalizeCompleted: completed=%d finalized=%v", storage.completed, sessions.finalized)
+	}
+	_ = view
+}
+
 func TestCompleteUploadRejectsStoredMetadataMismatch(t *testing.T) {
-	sessions := &fakeUploadSessions{found: true, session: UploadSession{UploadID: "upload-1"}}
+	sessions := &fakeUploadSessions{found: true, session: UploadSession{UploadID: "upload-1", Status: UploadSessionActive, ExpiresAt: time.Now().Add(time.Hour)}}
 	storage := &fakeMultipartStorage{stored: StoredObject{ByteSize: 1, ContentType: "image/jpeg"}}
 	_, err := uploadTestService(t, sessions, storage).Complete(context.Background(), "org-1", "event-1", "photo-1", "upload-1", []CompletedPart{{PartNumber: 1, ETag: "a"}, {PartNumber: 2, ETag: "b"}})
-	if !errors.Is(err, ErrInvalid) || sessions.completed {
-		t.Fatalf("error=%v completed=%v", err, sessions.completed)
+	if !errors.Is(err, ErrInvalid) || sessions.finalized {
+		t.Fatalf("error=%v finalized=%v", err, sessions.finalized)
 	}
 }
 
@@ -194,5 +234,13 @@ func TestCompletePartsRequireOrderedUniqueBounds(t *testing.T) {
 		if _, err := NewCompletedParts(invalid, 3); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("parts %#v error = %v", invalid, err)
 		}
+	}
+}
+
+func TestPhotoIdempotencyKey(t *testing.T) {
+	p := Photo{ID: "abc-123", ProcessingGeneration: 2}
+	want := "photo.process:abc-123:2"
+	if got := p.IdempotencyKey(); got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }

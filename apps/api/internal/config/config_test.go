@@ -24,7 +24,7 @@ func TestLoadDatabaseSettingsUsesSafeDefaults(t *testing.T) {
 	if cfg.DatabaseMaxConns != 10 {
 		t.Fatalf("DatabaseMaxConns = %d", cfg.DatabaseMaxConns)
 	}
-	if cfg.SchemaVersion != 2 {
+	if cfg.SchemaVersion != 3 {
 		t.Fatalf("SchemaVersion = %d", cfg.SchemaVersion)
 	}
 }
