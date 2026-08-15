@@ -60,11 +60,12 @@ docker compose config
 - Ranh giới persistence của Go API với pgx pool giới hạn, transaction bảo đảm rollback, lỗi cơ sở dữ liệu được làm sạch và kiểm tra phiên bản migration khi readiness
 - Authentication contract và UI cho registration, login, current user, refresh-token rotation và logout
 - Argon2id password hashing, access token ngắn hạn trong browser memory và opaque refresh cookie HttpOnly; PostgreSQL chỉ lưu refresh-token hash
+- Tenant authorization với role owner/admin/editor/viewer, permission matrix tập trung, membership được kiểm tra trực tiếp từ PostgreSQL và organization context chỉ lưu trong React memory
+- Request ID an toàn, phản hồi không tiết lộ foreign tenant và audit record giới hạn metadata cho authorization decisions
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai
 
-- Tenant roles, permissions và authorization middleware
 - Signed upload/MinIO application integration
 - Production Redis job consumption and orchestration
 - Production multi-tenant Qdrant collections and vector search

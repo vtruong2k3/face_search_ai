@@ -106,6 +106,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's active organization memberships */
+        get: operations["listOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        /** Get the authorized current membership */
+        get: operations["getOrganizationMembership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -128,6 +164,13 @@ export interface components {
             status: "active" | "disabled";
             /** Format: date-time */
             createdAt: string;
+        };
+        OrganizationMembership: {
+            /** Format: uuid */
+            organizationId: string;
+            organizationName: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "editor" | "viewer";
         };
         AuthResponse: {
             accessToken: string;
@@ -164,6 +207,15 @@ export interface components {
         };
         /** @description Authentication request rejected */
         AuthRejected: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Resource was not found or is not available to the caller */
+        NotFound: {
             headers: {
                 [name: string]: unknown;
             };
@@ -285,6 +337,51 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthRejected"];
+        };
+    };
+    listOrganizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active organization memberships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMembership"][];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+        };
+    };
+    getOrganizationMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized organization membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMembership"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

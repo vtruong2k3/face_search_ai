@@ -35,7 +35,15 @@ docker compose up --build
 
 Set `AUTH_SIGNING_KEY` to at least 32 unpredictable bytes in the ignored `.env`; never use the example placeholder outside local configuration setup. `AUTH_ISSUER`, `AUTH_AUDIENCE`, access/refresh TTLs, `WEB_ORIGIN`, and `REFRESH_COOKIE_SECURE` configure token validation and the credentialed browser boundary. Set secure cookies to true when served over HTTPS.
 
-The browser keeps access tokens in React memory only. It performs one refresh-cookie request during session restoration; tokens must not be added to localStorage, sessionStorage, URLs, or logs. Refresh and logout use a cookie scoped to `/api/v1/auth`, and credentialed CORS accepts only `WEB_ORIGIN`. Tenant roles and permissions are intentionally deferred to Task 2.4.
+The browser keeps access tokens in React memory only. It performs one refresh-cookie request during session restoration; tokens must not be added to localStorage, sessionStorage, URLs, or logs. Refresh and logout use a cookie scoped to `/api/v1/auth`, and credentialed CORS accepts only `WEB_ORIGIN`.
+
+## Authorization development
+
+Access tokens carry user identity but no organization role. Protected organization requests resolve current active membership from PostgreSQL, and actor identity always comes from validated bearer credentials rather than request fields. The centralized role/permission matrix fails closed for unknown values. Foreign, disabled, suspended, and nonexistent organization identifiers are intentionally non-enumerating.
+
+The web organization selection is held in React memory only and is cleared on logout or rejected session restoration. Request IDs accept only 1–64 ASCII letters, digits, hyphens, or underscores; otherwise the API generates one and returns it as `X-Request-ID`. Authorization audit records contain only bounded action, resource, outcome, request ID, and allowlisted safe metadata. Never add credentials, tokens, refresh hashes, request bodies, signed URLs, storage paths, embeddings, image bytes, or biometric observations to logs or audits.
+
+Every future repository, job, export, object operation, and vector search must accept organization ID as mandatory scope. A lookup by resource ID alone is not authorized even if foreign keys exist.
 
 For a genuinely fresh local deployment, first confirm no needed local data exists, then explicitly remove the normal volumes:
 

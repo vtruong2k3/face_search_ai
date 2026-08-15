@@ -71,6 +71,40 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/AuthRejected" }
+  /organizations:
+    get:
+      summary: List the current user's active organization memberships
+      operationId: listOrganizations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active organization memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrganizationMembership" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+  /organizations/{organizationId}/membership:
+    parameters:
+      - name: organizationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get the authorized current membership
+      operationId: getOrganizationMembership
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Authorized organization membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationMembership" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -93,6 +127,11 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     AuthRejected:
       description: Authentication request rejected
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource was not found or is not available to the caller
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -120,6 +159,14 @@ components:
         email: { type: string, format: email }
         status: { type: string, enum: [active, disabled] }
         createdAt: { type: string, format: date-time }
+    OrganizationMembership:
+      type: object
+      additionalProperties: false
+      required: [organizationId, organizationName, role]
+      properties:
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        role: { type: string, enum: [owner, admin, editor, viewer] }
     AuthResponse:
       type: object
       additionalProperties: false

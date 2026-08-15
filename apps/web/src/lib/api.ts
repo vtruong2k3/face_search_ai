@@ -8,6 +8,7 @@ import type { components } from "@/types/api.generated";
 export type User = components["schemas"]["User"];
 export type Credentials = components["schemas"]["Credentials"];
 export type AuthResponse = components["schemas"]["AuthResponse"];
+export type OrganizationMembership = components["schemas"]["OrganizationMembership"];
 
 let accessToken: string | null = null;
 
@@ -32,7 +33,7 @@ export function login(credentials: Credentials) { return authRequest("/auth/logi
 export function refresh() { return authRequest("/auth/refresh", { method: "POST" }).then(readAuth); }
 export async function logout() { await authRequest("/auth/logout", { method: "POST" }); accessToken = null; }
 export async function getCurrentUser(): Promise<User> { const response = await authRequest("/auth/me"); if (!response.ok) throw new Error("Authentication required."); return response.json() as Promise<User>; }
-
+export async function listOrganizations(): Promise<OrganizationMembership[]> { const response = await authRequest("/organizations"); if (!response.ok) throw new Error("Organizations could not be loaded."); return response.json() as Promise<OrganizationMembership[]>; }
 
 export async function getApiHealth(): Promise<HealthResponse> {
   const response = await fetch(`${apiBaseUrl}/health/ready`, {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/face-search-ai/api/internal/config"
 	"github.com/face-search-ai/api/internal/domain/auth"
+	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/store"
 	"github.com/face-search-ai/api/internal/store/postgres"
 	"github.com/minio/minio-go/v7"
@@ -17,12 +18,13 @@ import (
 )
 
 type Dependencies struct {
-	postgres   *postgres.Store
-	redis      *redis.Client
-	minio      *minio.Client
-	cfg        config.Config
-	httpClient *http.Client
-	auth       *auth.Service
+	postgres      *postgres.Store
+	redis         *redis.Client
+	minio         *minio.Client
+	cfg           config.Config
+	httpClient    *http.Client
+	auth          *auth.Service
+	authorization *authorization.Service
 }
 
 type Status struct {
@@ -50,11 +52,23 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		pool.Close()
 		return nil, fmt.Errorf("minio config: %w", err)
 	}
-	return &Dependencies{postgres: pool, redis: redis.NewClient(redisOptions), minio: minioClient, cfg: cfg, httpClient: &http.Client{Timeout: cfg.DependencyTimeout}, auth: authService}, nil
+	return &Dependencies{
+		postgres:   pool,
+		redis:      redis.NewClient(redisOptions),
+		minio:      minioClient,
+		cfg:        cfg,
+		httpClient: &http.Client{Timeout: cfg.DependencyTimeout},
+		auth:       authService,
+		authorization: authorization.NewServiceWithAuditor(
+			postgres.NewAuthorizationRepository(pool),
+			postgres.NewAuditRepository(pool),
+		),
+	}, nil
 }
 
-func (d *Dependencies) AuthService() *auth.Service { return d.auth }
-func (d *Dependencies) Config() config.Config      { return d.cfg }
+func (d *Dependencies) AuthService() *auth.Service                   { return d.auth }
+func (d *Dependencies) AuthorizationService() *authorization.Service { return d.authorization }
+func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 func (d *Dependencies) Persistence() interface {
 	store.DBTX

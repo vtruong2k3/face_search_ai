@@ -27,7 +27,18 @@ func main() {
 	}
 	defer dependencies.Close()
 	authHandler := handlers.NewAuth(dependencies.AuthService(), cfg.RefreshCookieSecure, cfg.RefreshTokenTTL)
-	server := &http.Server{Addr: cfg.Address(), Handler: httpserver.NewRouterWithAuth(dependencies, authHandler, cfg.WebOrigin), ReadHeaderTimeout: 5 * time.Second}
+	organizationsHandler := handlers.NewOrganizations(dependencies.AuthorizationService())
+	server := &http.Server{
+		Addr: cfg.Address(),
+		Handler: httpserver.NewRouterWithAuth(
+			dependencies,
+			authHandler,
+			dependencies.AuthService(),
+			organizationsHandler,
+			cfg.WebOrigin,
+		),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	go func() {
 		slog.Info("api listening", "address", cfg.Address())
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
