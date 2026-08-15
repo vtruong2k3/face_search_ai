@@ -10,6 +10,10 @@ import (
 )
 
 func NewRouter(checker handlers.Checker) http.Handler {
+	return NewRouterWithAuth(checker, nil, "")
+}
+
+func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, webOrigin string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", handlers.Live)
 	mux.HandleFunc("GET /health/ready", handlers.Ready(checker))
@@ -17,7 +21,14 @@ func NewRouter(checker handlers.Checker) http.Handler {
 	mux.HandleFunc("GET /api/v1", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"name": "face-search-api", "version": "v1"})
 	})
-	return middleware.RequestLog(mux)
+	if authHandler != nil {
+		mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
+		mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+		mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+		mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
+		mux.HandleFunc("GET /api/v1/auth/me", authHandler.Me)
+	}
+	return middleware.CORS(webOrigin, middleware.RequestLog(mux))
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

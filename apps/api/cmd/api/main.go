@@ -12,6 +12,7 @@ import (
 
 	"github.com/face-search-ai/api/internal/config"
 	httpserver "github.com/face-search-ai/api/internal/http"
+	"github.com/face-search-ai/api/internal/http/handlers"
 	"github.com/face-search-ai/api/internal/platform"
 )
 
@@ -25,7 +26,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer dependencies.Close()
-	server := &http.Server{Addr: cfg.Address(), Handler: httpserver.NewRouter(dependencies), ReadHeaderTimeout: 5 * time.Second}
+	authHandler := handlers.NewAuth(dependencies.AuthService(), cfg.RefreshCookieSecure, cfg.RefreshTokenTTL)
+	server := &http.Server{Addr: cfg.Address(), Handler: httpserver.NewRouterWithAuth(dependencies, authHandler, cfg.WebOrigin), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		slog.Info("api listening", "address", cfg.Address())
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

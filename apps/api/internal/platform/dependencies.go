@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/face-search-ai/api/internal/config"
+	"github.com/face-search-ai/api/internal/domain/auth"
 	"github.com/face-search-ai/api/internal/store"
 	"github.com/face-search-ai/api/internal/store/postgres"
 	"github.com/minio/minio-go/v7"
@@ -21,6 +22,7 @@ type Dependencies struct {
 	minio      *minio.Client
 	cfg        config.Config
 	httpClient *http.Client
+	auth       *auth.Service
 }
 
 type Status struct {
@@ -33,6 +35,11 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres config: %w", err)
 	}
+	authService, err := auth.NewService(postgres.NewAuthRepository(pool), cfg.AuthSigningKey, cfg.AuthIssuer, cfg.AuthAudience, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("auth config: %w", err)
+	}
 	redisOptions, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		pool.Close()
@@ -43,8 +50,11 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		pool.Close()
 		return nil, fmt.Errorf("minio config: %w", err)
 	}
-	return &Dependencies{postgres: pool, redis: redis.NewClient(redisOptions), minio: minioClient, cfg: cfg, httpClient: &http.Client{Timeout: cfg.DependencyTimeout}}, nil
+	return &Dependencies{postgres: pool, redis: redis.NewClient(redisOptions), minio: minioClient, cfg: cfg, httpClient: &http.Client{Timeout: cfg.DependencyTimeout}, auth: authService}, nil
 }
+
+func (d *Dependencies) AuthService() *auth.Service { return d.auth }
+func (d *Dependencies) Config() config.Config      { return d.cfg }
 
 func (d *Dependencies) Persistence() interface {
 	store.DBTX
