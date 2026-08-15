@@ -36,6 +36,15 @@ type updateEventRequest struct {
 	MatchThreshold   **float64         `json:"matchThreshold"`
 }
 
+func (h *Events) Public(w http.ResponseWriter, r *http.Request) {
+	result, err := h.events.FindPublic(r.Context(), r.PathValue("publicToken"), time.Now().UTC())
+	if err != nil {
+		h.writeUnavailable(w)
+		return
+	}
+	writeAuthJSON(w, http.StatusOK, result)
+}
+
 func (h *Events) Create(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := h.authorize(w, r, authorization.PermissionEventWrite, "event.create")
 	if !ok {

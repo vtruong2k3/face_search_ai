@@ -23,6 +23,9 @@ func (f *fakeRepository) Update(context.Context, string, string, UpdateCommand) 
 	return f.event, f.err
 }
 func (f *fakeRepository) Archive(context.Context, string, string) error { return f.err }
+func (f *fakeRepository) FindPublic(context.Context, string, time.Time) (PublicEvent, error) {
+	return PublicEvent{}, f.err
+}
 func (f *fakeRepository) Status(context.Context, string, string) (ProcessingStatus, error) {
 	return ProcessingStatus{}, f.err
 }
@@ -80,6 +83,43 @@ func TestServiceDerivesTrustedOwnership(t *testing.T) {
 	}
 	if repository.created.OrganizationID != "org-1" || repository.created.CreatedByUserID != "user-1" {
 		t.Fatalf("trusted create params = %#v", repository.created)
+	}
+}
+
+func TestPublicEligibilityFailsClosed(t *testing.T) {
+	now := time.Now().UTC()
+	future := now.Add(time.Hour)
+	past := now.Add(-time.Hour)
+	tests := []struct {
+		name  string
+		event Event
+		want  bool
+	}{
+		{name: "eligible", event: Event{Visibility: VisibilityPublic, Status: StatusActive, PublicToken: "opaque", ExpiresAt: &future}, want: true},
+		{name: "private", event: Event{Visibility: VisibilityPrivate, Status: StatusActive, PublicToken: "opaque"}},
+		{name: "archived", event: Event{Visibility: VisibilityPublic, Status: StatusArchived, PublicToken: "opaque"}},
+		{name: "expired", event: Event{Visibility: VisibilityPublic, Status: StatusActive, PublicToken: "opaque", ExpiresAt: &past}},
+		{name: "missing token", event: Event{Visibility: VisibilityPublic, Status: StatusActive}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.event.IsPubliclyEligible(now); got != test.want {
+				t.Fatalf("eligible = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestCanonicalPublicURLUsesTrustedOrigin(t *testing.T) {
+	got, err := CanonicalPublicURL("https://photos.example.com/", "opaque-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://photos.example.com/e/opaque-token" {
+		t.Fatalf("URL = %q", got)
+	}
+	if _, err := CanonicalPublicURL("javascript:alert(1)", "token"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("error = %v, want ErrInvalid", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -32,9 +33,31 @@ type Event struct {
 	ExpiresAt        *time.Time `json:"expiresAt"`
 	DownloadsEnabled bool       `json:"downloadsEnabled"`
 	MatchThreshold   *float64   `json:"matchThreshold"`
+	PublicToken      string     `json:"-"`
 	CreatedByUserID  string     `json:"createdByUserId"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	UpdatedAt        time.Time  `json:"updatedAt"`
+}
+
+type PublicEvent struct {
+	Name             string     `json:"name"`
+	ExpiresAt        *time.Time `json:"expiresAt"`
+	DownloadsEnabled bool       `json:"downloadsEnabled"`
+}
+
+func (e Event) IsPubliclyEligible(now time.Time) bool {
+	return e.Visibility == VisibilityPublic && e.Status == StatusActive && e.PublicToken != "" && (e.ExpiresAt == nil || e.ExpiresAt.After(now))
+}
+
+func CanonicalPublicURL(origin, token string) (string, error) {
+	parsed, err := url.Parse(origin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || token == "" {
+		return "", ErrInvalid
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/e/" + url.PathEscape(token)
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
 }
 
 type CreateCommand struct {
@@ -79,6 +102,7 @@ type Repository interface {
 	Update(context.Context, string, string, UpdateCommand) (Event, error)
 	Archive(context.Context, string, string) error
 	Status(context.Context, string, string) (ProcessingStatus, error)
+	FindPublic(context.Context, string, time.Time) (PublicEvent, error)
 }
 
 type Service struct {
@@ -144,6 +168,13 @@ func (s *Service) Archive(ctx context.Context, organizationID, eventID string) e
 		return ErrInvalid
 	}
 	return s.repository.Archive(ctx, organizationID, eventID)
+}
+
+func (s *Service) FindPublic(ctx context.Context, token string, now time.Time) (PublicEvent, error) {
+	if token == "" || len(token) > 200 {
+		return PublicEvent{}, ErrInvalid
+	}
+	return s.repository.FindPublic(ctx, token, now)
 }
 
 func (s *Service) Status(ctx context.Context, organizationID, eventID string) (ProcessingStatus, error) {

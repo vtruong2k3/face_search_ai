@@ -53,8 +53,8 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 - [x] Task 3.1: Implement Event contract and domain (tenant-scoped Event CRUD foundation, archive semantics, generated contract types, and trusted processing counters)
 - [x] Task 3.2: Build photographer Event UI (tenant-scoped list/create/detail/settings routes; viewer read-only controls; loading, empty, validation, and safe-error states; Vitest coverage)
-- [ ] Task 3.3: Add public Event and QR
-- [ ] Checkpoint 3: Private management and public access policy
+- [x] Task 3.3: Add public Event and QR (opaque server-generated tokens; uniform private/expired/archived rejection; limited public DTO; canonical public URL and QR tests)
+- [x] Checkpoint 3: Private management and public access policy
 
 ## Phase 4 — Secure photo ingestion
 

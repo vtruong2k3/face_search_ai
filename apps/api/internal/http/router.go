@@ -33,6 +33,9 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 		mux.Handle("GET /api/v1/organizations", middleware.Authenticate(authService, http.HandlerFunc(organizationsHandler.List)))
 		mux.Handle("GET /api/v1/organizations/{organizationId}/membership", middleware.Authenticate(authService, http.HandlerFunc(organizationsHandler.Membership)))
 	}
+	if eventsHandler != nil {
+		mux.HandleFunc("GET /api/v1/public/events/{publicToken}", eventsHandler.Public)
+	}
 	if authService != nil && eventsHandler != nil {
 		protected := func(handler http.HandlerFunc) http.Handler { return middleware.Authenticate(authService, handler) }
 		mux.Handle("GET /api/v1/organizations/{organizationId}/events", protected(eventsHandler.List))

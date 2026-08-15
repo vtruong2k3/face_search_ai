@@ -204,6 +204,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/events/{publicToken}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicToken: string;
+            };
+            cookie?: never;
+        };
+        /** Get an eligible public Event */
+        get: operations["getPublicEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -273,6 +292,12 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        PublicEvent: {
+            name: string;
+            /** Format: date-time */
+            expiresAt: string | null;
+            downloadsEnabled: boolean;
         };
         EventProcessingStatus: {
             /** Format: uuid */
@@ -655,6 +680,29 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Limited public Event capability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicEvent"];
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };

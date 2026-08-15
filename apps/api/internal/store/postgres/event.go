@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/store"
@@ -20,8 +21,9 @@ func (r *EventRepository) Create(ctx context.Context, params event.CreateParams)
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO events (
 			organization_id, name, visibility, expires_at,
-			downloads_enabled, match_threshold, created_by_user_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			downloads_enabled, match_threshold, created_by_user_id, public_token
+		) VALUES ($1, $2, $3, $4, $5, $6, $7,
+			CASE WHEN $3 = 'public' THEN encode(gen_random_bytes(32), 'hex') ELSE NULL END)
 		RETURNING id, organization_id, name, visibility, status, expires_at,
 			downloads_enabled, match_threshold, created_by_user_id, created_at, updated_at`,
 		params.OrganizationID, params.Name, params.Visibility, params.ExpiresAt,
@@ -100,7 +102,9 @@ func (r *EventRepository) Update(ctx context.Context, organizationID, eventID st
 	}
 	err = r.db.QueryRow(ctx, `
 		UPDATE events SET name = $3, visibility = $4, expires_at = $5,
-			downloads_enabled = $6, match_threshold = $7, updated_at = now()
+			downloads_enabled = $6, match_threshold = $7,
+			public_token = CASE WHEN $4 = 'public' THEN coalesce(public_token, encode(gen_random_bytes(32), 'hex')) ELSE public_token END,
+			updated_at = now()
 		WHERE organization_id = $1 AND id = $2 AND status = 'active'
 		RETURNING id, organization_id, name, visibility, status, expires_at,
 			downloads_enabled, match_threshold, created_by_user_id, created_at, updated_at`,
@@ -125,6 +129,22 @@ func (r *EventRepository) Archive(ctx context.Context, organizationID, eventID s
 		return store.ErrNotFound
 	}
 	return nil
+}
+
+func (r *EventRepository) FindPublic(ctx context.Context, token string, now time.Time) (event.PublicEvent, error) {
+	var result event.PublicEvent
+	err := r.db.QueryRow(ctx, `
+		SELECT name, expires_at, downloads_enabled
+		FROM events
+		WHERE public_token = $1
+		  AND visibility = 'public'
+		  AND status = 'active'
+		  AND (expires_at IS NULL OR expires_at > $2)`, token, now,
+	).Scan(&result.Name, &result.ExpiresAt, &result.DownloadsEnabled)
+	if err != nil {
+		return event.PublicEvent{}, MapError(err)
+	}
+	return result, nil
 }
 
 func (r *EventRepository) Status(ctx context.Context, organizationID, eventID string) (event.ProcessingStatus, error) {

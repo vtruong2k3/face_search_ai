@@ -204,6 +204,22 @@ paths:
               schema: { $ref: "#/components/schemas/EventProcessingStatus" }
         "401": { $ref: "#/components/responses/AuthRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /public/events/{publicToken}:
+    parameters:
+      - name: publicToken
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+    get:
+      summary: Get an eligible public Event
+      operationId: getPublicEvent
+      responses:
+        "200":
+          description: Limited public Event capability
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicEvent" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   parameters:
     OrganizationId:
@@ -324,6 +340,14 @@ components:
         createdByUserId: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PublicEvent:
+      type: object
+      additionalProperties: false
+      required: [name, expiresAt, downloadsEnabled]
+      properties:
+        name: { type: string }
+        expiresAt: { type: [string, "null"], format: date-time }
+        downloadsEnabled: { type: boolean }
     EventProcessingStatus:
       type: object
       additionalProperties: false
