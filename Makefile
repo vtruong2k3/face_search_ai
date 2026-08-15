@@ -1,4 +1,4 @@
-.PHONY: setup check build test compose-config migrate-up migrate-down migrate-version migrate-verify up down logs
+.PHONY: setup check build test compose-config migrate-up migrate-down migrate-version migrate-verify api-store-verify up down logs
 
 setup:
 	cd apps/web && npm ci
@@ -33,6 +33,9 @@ migrate-version:
 
 migrate-verify:
 	bash scripts/verify-migrations.sh
+
+api-store-verify:
+	bash scripts/verify-api-store.sh
 
 up:
 	docker compose up --build

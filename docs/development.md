@@ -16,7 +16,9 @@ Real Qdrant adapter tests are opt-in. Run them from an environment that can reac
 
 ## Database migrations
 
-The versioned SQL migrations under `migrations/` are executed by a pinned one-shot Compose service. Normal startup waits for PostgreSQL migrations and idempotent creation of the configured MinIO bucket before starting the API. The API does not own runtime migration logic yet.
+The versioned SQL migrations under `migrations/` are executed by a pinned one-shot Compose service. Normal startup waits for PostgreSQL migrations and idempotent creation of the configured MinIO bucket before starting the API. The API does not mutate the schema: its persistence adapter verifies that `schema_migrations` is clean and exactly matches `DATABASE_SCHEMA_VERSION` before reporting ready.
+
+The Go PostgreSQL pool is bounded by `DATABASE_MAX_CONNECTIONS`. Repository adapters use the shared `DBTX` and transaction callback boundaries under `apps/api/internal/store`; callers do not own commits or rollbacks.
 
 Copy `.env.example` to the ignored `.env` file and replace every local placeholder before starting the stack. Then use:
 
@@ -27,7 +29,7 @@ make migrate-version
 docker compose up --build
 ```
 
-`make migrate-down` deliberately refuses to alter the normal development database. Use `make migrate-verify` to run the complete up/down/up cycle against an isolated Compose project and disposable PostgreSQL volume. The verification always removes that project and volume; it does not touch the normal `postgres-data` volume.
+`make migrate-down` deliberately refuses to alter the normal development database. Use `make migrate-verify` to run the complete up/down/up cycle against an isolated Compose project and disposable PostgreSQL volume. Use `make api-store-verify` to apply the same migration to another isolated project and run the real Go persistence integration suite, including commit, rollback, constraint mapping, and schema readiness. Both verifications always remove their projects and volumes; neither touches the normal `postgres-data` volume.
 
 For a genuinely fresh local deployment, first confirm no needed local data exists, then explicitly remove the normal volumes:
 

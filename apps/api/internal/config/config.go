@@ -10,6 +10,8 @@ type Config struct {
 	Host              string
 	Port              string
 	DatabaseURL       string
+	DatabaseMaxConns  int32
+	SchemaVersion     int64
 	RedisURL          string
 	QdrantURL         string
 	MinIOEndpoint     string
@@ -26,6 +28,8 @@ func Load() Config {
 		Host:              valueOrDefault("API_HOST", "0.0.0.0"),
 		Port:              valueOrDefault("API_PORT", "8080"),
 		DatabaseURL:       valueOrDefault("DATABASE_URL", "postgres://face_search:face_search@localhost:5432/face_search?sslmode=disable"),
+		DatabaseMaxConns:  int32Value("DATABASE_MAX_CONNECTIONS", 10),
+		SchemaVersion:     int64Value("DATABASE_SCHEMA_VERSION", 1),
 		RedisURL:          valueOrDefault("REDIS_URL", "redis://localhost:6379/0"),
 		QdrantURL:         valueOrDefault("QDRANT_URL", "http://localhost:6333"),
 		MinIOEndpoint:     valueOrDefault("MINIO_ENDPOINT", "localhost:9000"),
@@ -50,6 +54,22 @@ func valueOrDefault(key, fallback string) string {
 func boolValue(key string, fallback bool) bool {
 	value, err := strconv.ParseBool(os.Getenv(key))
 	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func int32Value(key string, fallback int32) int32 {
+	value, err := strconv.ParseInt(os.Getenv(key), 10, 32)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return int32(value)
+}
+
+func int64Value(key string, fallback int64) int64 {
+	value, err := strconv.ParseInt(os.Getenv(key), 10, 64)
+	if err != nil || value <= 0 {
 		return fallback
 	}
 	return value

@@ -44,7 +44,7 @@ Last updated: 2026-08-14
 Phase 2 platform-foundation implementation is authorized to proceed independently of Checkpoint 1. This authorization does not approve a production threshold, real AI quality or CPU-performance claims, commercial use of the current PoC weights, or commercial/release readiness.
 
 - [x] Task 2.1: Harden infrastructure and add migrations (versioned reversible MVP schema; database-enforced tenant integrity/state/idempotency; Compose migration and MinIO initialization gates; disposable up/down/up verification)
-- [ ] Task 2.2: Add Go persistence boundaries
+- [x] Task 2.2: Add Go persistence boundaries (bounded pgx pool; DBTX and transaction ports; rollback guarantees; sanitized error mapping; exact migration-version readiness; disposable PostgreSQL integration verification)
 - [ ] Task 2.3: Implement authentication slice
 - [ ] Task 2.4: Implement tenant authorization foundation
 - [ ] Checkpoint 2: Auth and tenant isolation

@@ -57,12 +57,12 @@ docker compose config
 - Ràng buộc trạng thái, idempotency và quan hệ tenant/Event ở tầng cơ sở dữ liệu
 - Compose tự chạy migration và tạo MinIO bucket theo cách idempotent trước khi khởi động API
 - `make migrate-verify` kiểm tra up/down/up trên volume PostgreSQL tách biệt và dùng một lần
+- Ranh giới persistence của Go API với pgx pool giới hạn, transaction bảo đảm rollback, lỗi cơ sở dữ liệu được làm sạch và kiểm tra phiên bản migration khi readiness
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai
 
 - Authentication và authorization
-- Go persistence repositories và transaction boundaries
 - Signed upload/MinIO application integration
 - Production Redis job consumption and orchestration
 - Production multi-tenant Qdrant collections and vector search

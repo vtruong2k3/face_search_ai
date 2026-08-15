@@ -8,14 +8,15 @@ import (
 	"sync"
 
 	"github.com/face-search-ai/api/internal/config"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/face-search-ai/api/internal/store"
+	"github.com/face-search-ai/api/internal/store/postgres"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/redis/go-redis/v9"
 )
 
 type Dependencies struct {
-	postgres   *pgxpool.Pool
+	postgres   *postgres.Store
 	redis      *redis.Client
 	minio      *minio.Client
 	cfg        config.Config
@@ -28,7 +29,7 @@ type Status struct {
 }
 
 func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := postgres.Open(ctx, cfg.DatabaseURL, cfg.DatabaseMaxConns, cfg.SchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("postgres config: %w", err)
 	}
@@ -45,14 +46,27 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 	return &Dependencies{postgres: pool, redis: redis.NewClient(redisOptions), minio: minioClient, cfg: cfg, httpClient: &http.Client{Timeout: cfg.DependencyTimeout}}, nil
 }
 
+func (d *Dependencies) Persistence() interface {
+	store.DBTX
+	store.Transactor
+	store.SchemaChecker
+} {
+	return d.postgres
+}
+
 func (d *Dependencies) Close() { d.redis.Close(); d.postgres.Close() }
 
 func (d *Dependencies) Check(ctx context.Context) map[string]Status {
 	checks := map[string]func(context.Context) error{
-		"postgres": d.postgres.Ping,
-		"redis":    func(ctx context.Context) error { return d.redis.Ping(ctx).Err() },
-		"minio":    func(ctx context.Context) error { _, err := d.minio.ListBuckets(ctx); return err },
-		"qdrant":   func(ctx context.Context) error { return d.get(ctx, strings.TrimRight(d.cfg.QdrantURL, "/")+"/healthz") },
+		"postgres": func(ctx context.Context) error {
+			if err := d.postgres.Ping(ctx); err != nil {
+				return err
+			}
+			return d.postgres.CheckSchema(ctx)
+		},
+		"redis":  func(ctx context.Context) error { return d.redis.Ping(ctx).Err() },
+		"minio":  func(ctx context.Context) error { _, err := d.minio.ListBuckets(ctx); return err },
+		"qdrant": func(ctx context.Context) error { return d.get(ctx, strings.TrimRight(d.cfg.QdrantURL, "/")+"/healthz") },
 		"face_ai": func(ctx context.Context) error {
 			return d.get(ctx, strings.TrimRight(d.cfg.FaceAIURL, "/")+"/health/ready")
 		},
