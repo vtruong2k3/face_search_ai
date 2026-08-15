@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     insightface_detection_height: int = 640
     insightface_detection_threshold: float = 0.5
     qdrant_url: str = "http://localhost:6333"
+    internal_token: str | None = None
 
     @field_validator("insightface_pack")
     @classmethod

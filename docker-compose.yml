@@ -64,6 +64,7 @@ services:
       FACE_AI_ONNX_PROVIDER: CPUExecutionProvider
       FACE_AI_MODELS_REQUIRED: "false"
       FACE_AI_QDRANT_URL: http://qdrant:6333
+      FACE_AI_INTERNAL_TOKEN: ${FACE_AI_INTERNAL_TOKEN:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready')"]
       interval: 10s

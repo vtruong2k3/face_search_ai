@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Response, status
 from prometheus_client import make_asgi_app
 
+from face_ai.routes.inference import router as inference_router
 from face_ai.runtime import runtime_status
 from face_ai.settings import get_settings
 
@@ -8,6 +9,7 @@ from face_ai.settings import get_settings
 def create_app() -> FastAPI:
     app = FastAPI(title="Face AI Internal Service", version="0.1.0")
     app.mount("/metrics", make_asgi_app())
+    app.include_router(inference_router)
 
     @app.get("/health/live")
     async def live() -> dict[str, str]:

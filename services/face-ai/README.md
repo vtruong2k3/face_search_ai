@@ -43,6 +43,12 @@ uv sync --project services/face-ai
 
 Validated images use RGB HWC `uint8`. The InsightFace adapter converts RGB to BGR only at model boundaries.
 
+## Internal inference endpoint
+
+The service exposes `POST /internal/v1/extract-faces` for internal callers (the photo worker during background indexing and the API during selfie search). It accepts raw image bytes as `application/octet-stream` and returns a typed `ExtractFacesResponse`: bounding boxes, five landmarks, confidence, and L2-normalized float32 embeddings per detected face, plus image dimensions, media type, and per-stage timings. Faces are returned in deterministic spatial order.
+
+The endpoint enforces a 20 MB payload limit (a `Content-Length` pre-check plus the image-validation byte limit), rejects empty or corrupt bodies, and returns `503 inference_pipeline_not_ready` while the model pipeline is unavailable. When `FACE_AI_INTERNAL_TOKEN` is set, callers must supply it via the `X-Internal-Token` header or `Authorization: Bearer <token>`; otherwise the endpoint is reachable only inside the private Docker network. Error responses are sanitized and never leak paths or internals. Image bytes, buffers, and embedding vectors are never logged or persisted.
+
 ## Verification
 
 Unit tests use injected fakes and never require models or network access:
