@@ -204,6 +204,89 @@ paths:
               schema: { $ref: "#/components/schemas/EventProcessingStatus" }
         "401": { $ref: "#/components/responses/AuthRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /organizations/{organizationId}/events/{eventId}/photos:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/EventId"
+    get:
+      summary: List active Photos in an Event
+      operationId: listPhotos
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active Photos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Photo" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      summary: Create a pending Photo owned by the authorized Event
+      operationId: createPhoto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePhoto" }
+      responses:
+        "201":
+          description: Pending Photo created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Photo" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /organizations/{organizationId}/events/{eventId}/photos/{photoId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/EventId"
+      - $ref: "#/components/parameters/PhotoId"
+    get:
+      summary: Get a Photo status
+      operationId: getPhoto
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Photo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Photo" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Soft-delete a Photo
+      operationId: deletePhoto
+      security:
+        - bearerAuth: []
+      responses:
+        "204": { description: Photo deleted or already deleted }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /organizations/{organizationId}/events/{eventId}/photos/{photoId}/reprocess:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/EventId"
+      - $ref: "#/components/parameters/PhotoId"
+    post:
+      summary: Requeue a failed Photo
+      operationId: reprocessPhoto
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Photo requeued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Photo" }
+        "401": { $ref: "#/components/responses/AuthRejected" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /public/events/{publicToken}:
     parameters:
       - name: publicToken
@@ -229,6 +312,11 @@ components:
       schema: { type: string, format: uuid }
     EventId:
       name: eventId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PhotoId:
+      name: photoId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -363,6 +451,33 @@ components:
         ready: { type: integer, minimum: 0 }
         failed: { type: integer, minimum: 0 }
         deleted: { type: integer, minimum: 0 }
+    PhotoStatus:
+      type: string
+      enum: [pending, uploading, uploaded, queued, processing, ready, failed]
+    CreatePhoto:
+      type: object
+      additionalProperties: false
+      required: [originalFilename, contentType, byteSize]
+      properties:
+        originalFilename: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        byteSize: { type: integer, minimum: 1, maximum: 104857600 }
+        checksumSha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+    Photo:
+      type: object
+      additionalProperties: false
+      required: [id, eventId, originalFilename, contentType, byteSize, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        originalFilename: { type: string }
+        contentType: { type: string }
+        byteSize: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PhotoStatus" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     AuthResponse:
       type: object
       additionalProperties: false

@@ -106,7 +106,12 @@ func (h *Events) Update(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
 		return
 	}
-	result, err := h.events.Update(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), event.UpdateCommand(request))
+	command, err := event.NewUpdateCommand(request.Name, request.Visibility, request.ExpiresAt, request.DownloadsEnabled, request.MatchThreshold)
+	if err != nil {
+		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+		return
+	}
+	result, err := h.events.Update(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), command)
 	if err != nil {
 		h.writeUnavailable(w)
 		return

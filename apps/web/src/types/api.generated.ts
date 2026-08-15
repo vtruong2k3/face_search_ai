@@ -204,6 +204,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations/{organizationId}/events/{eventId}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        /** List active Photos in an Event */
+        get: operations["listPhotos"];
+        put?: never;
+        /** Create a pending Photo owned by the authorized Event */
+        post: operations["createPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        /** Get a Photo status */
+        get: operations["getPhoto"];
+        put?: never;
+        post?: never;
+        /** Soft-delete a Photo */
+        delete: operations["deletePhoto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{organizationId}/events/{eventId}/photos/{photoId}/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requeue a failed Photo */
+        post: operations["reprocessPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/events/{publicToken}": {
         parameters: {
             query?: never;
@@ -312,6 +376,29 @@ export interface components {
             failed: number;
             deleted: number;
         };
+        /** @enum {string} */
+        PhotoStatus: "pending" | "uploading" | "uploaded" | "queued" | "processing" | "ready" | "failed";
+        CreatePhoto: {
+            originalFilename: string;
+            /** @enum {string} */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            byteSize: number;
+            checksumSha256?: string;
+        };
+        Photo: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            eventId: string;
+            originalFilename: string;
+            contentType: string;
+            byteSize: number;
+            status: components["schemas"]["PhotoStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         AuthResponse: {
             accessToken: string;
             /** @constant */
@@ -367,6 +454,7 @@ export interface components {
     parameters: {
         OrganizationId: string;
         EventId: string;
+        PhotoId: string;
     };
     requestBodies: never;
     headers: never;
@@ -677,6 +765,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventProcessingStatus"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active Photos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"][];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePhoto"];
+            };
+        };
+        responses: {
+            /** @description Pending Photo created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deletePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photo deleted or already deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["AuthRejected"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reprocessPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: components["parameters"]["OrganizationId"];
+                eventId: components["parameters"]["EventId"];
+                photoId: components["parameters"]["PhotoId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photo requeued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
                 };
             };
             401: components["responses"]["AuthRejected"];

@@ -58,7 +58,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 ## Phase 4 — Secure photo ingestion
 
-- [ ] Task 4.1: Define Photo lifecycle and object policy
+- [x] Task 4.1: Define Photo lifecycle and object policy (fail-closed lifecycle transitions, server-owned opaque object keys, tenant/Event/Photo-scoped CRUD policy, soft-delete/reprocess controls, and generated contract types)
 - [ ] Task 4.2: Implement signed multipart upload
 - [ ] Task 4.3: Build resumable uploader UI
 - [ ] Task 4.4: Finalize and enqueue idempotently

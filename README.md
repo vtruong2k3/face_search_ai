@@ -65,6 +65,7 @@ docker compose config
 - Event contract và backend tenant-scoped cho tạo, danh sách, chi tiết, cập nhật, archive và trusted processing counters
 - Photographer Event UI cho danh sách, tạo mới, chi tiết và cài đặt với quyền viewer chỉ đọc
 - Public Event landing page và QR dùng opaque server-generated token, limited public DTO và policy từ chối thống nhất cho Event private, archived hoặc expired
+- Photo lifecycle và object policy fail-closed với server-owned object key, tenant/Event/Photo-scoped list/detail/soft-delete/reprocess và DTO không lộ storage path
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai

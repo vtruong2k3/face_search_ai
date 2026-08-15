@@ -133,6 +133,29 @@ func NewCreateCommand(name string, visibility Visibility, expiresAt *time.Time, 
 	}, nil
 }
 
+func NewUpdateCommand(name *string, visibility *Visibility, expiresAt **time.Time, downloadsEnabled *bool, matchThreshold **float64) (UpdateCommand, error) {
+	if name != nil {
+		normalized := strings.TrimSpace(*name)
+		if normalized == "" || len(normalized) > 200 {
+			return UpdateCommand{}, ErrInvalid
+		}
+		name = &normalized
+	}
+	if visibility != nil && *visibility != VisibilityPrivate && *visibility != VisibilityPublic {
+		return UpdateCommand{}, ErrInvalid
+	}
+	if expiresAt != nil && *expiresAt != nil && !(*expiresAt).After(time.Now()) {
+		return UpdateCommand{}, ErrInvalid
+	}
+	if matchThreshold != nil && *matchThreshold != nil && (**matchThreshold < -1 || **matchThreshold > 1) {
+		return UpdateCommand{}, ErrInvalid
+	}
+	return UpdateCommand{
+		Name: name, Visibility: visibility, ExpiresAt: expiresAt,
+		DownloadsEnabled: downloadsEnabled, MatchThreshold: matchThreshold,
+	}, nil
+}
+
 func (s *Service) Create(ctx context.Context, organizationID, actorUserID string, command CreateCommand) (Event, error) {
 	if organizationID == "" || actorUserID == "" {
 		return Event{}, ErrInvalid

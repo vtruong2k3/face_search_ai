@@ -67,6 +67,53 @@ func TestCreateRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestUpdateValidatesAndNormalizesMutableFields(t *testing.T) {
+	name := "  Updated portraits  "
+	visibility := VisibilityPublic
+	future := time.Now().UTC().Add(time.Hour)
+	expiresAt := &future
+	thresholdValue := 0.6
+	threshold := &thresholdValue
+	downloadsEnabled := true
+
+	command, err := NewUpdateCommand(&name, &visibility, &expiresAt, &downloadsEnabled, &threshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.Name == nil || *command.Name != "Updated portraits" {
+		t.Fatalf("command = %#v", command)
+	}
+}
+
+func TestUpdateRejectsInvalidInput(t *testing.T) {
+	empty := "   "
+	unknown := Visibility("unknown")
+	pastValue := time.Now().UTC().Add(-time.Minute)
+	past := &pastValue
+	tooHighValue := 1.01
+	tooHigh := &tooHighValue
+	tests := []struct {
+		name       string
+		eventName  *string
+		visibility *Visibility
+		expiresAt  **time.Time
+		threshold  **float64
+	}{
+		{name: "empty name", eventName: &empty},
+		{name: "unknown visibility", visibility: &unknown},
+		{name: "past expiry", expiresAt: &past},
+		{name: "threshold above cosine range", threshold: &tooHigh},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewUpdateCommand(test.eventName, test.visibility, test.expiresAt, nil, test.threshold)
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("error = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
+
 func TestServiceDerivesTrustedOwnership(t *testing.T) {
 	repository := &fakeRepository{event: Event{ID: "event-1"}}
 	service := NewService(repository)
