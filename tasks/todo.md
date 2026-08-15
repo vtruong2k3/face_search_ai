@@ -66,7 +66,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 ## Phase 5 — Background indexing
 
-- [ ] Task 5.1: Implement reliable Redis worker
+- [x] Task 5.1: Implement reliable Redis worker
 - [ ] Task 5.2: Add safe image derivatives
 - [ ] Task 5.3: Expose internal inference endpoint
 - [ ] Task 5.4: Persist and index faces idempotently
