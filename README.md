@@ -62,6 +62,8 @@ docker compose config
 - Argon2id password hashing, access token ngắn hạn trong browser memory và opaque refresh cookie HttpOnly; PostgreSQL chỉ lưu refresh-token hash
 - Tenant authorization với role owner/admin/editor/viewer, permission matrix tập trung, membership được kiểm tra trực tiếp từ PostgreSQL và organization context chỉ lưu trong React memory
 - Request ID an toàn, phản hồi không tiết lộ foreign tenant và audit record giới hạn metadata cho authorization decisions
+- Event contract và backend tenant-scoped cho tạo, danh sách, chi tiết, cập nhật, archive và trusted processing counters
+- Photographer Event UI cho danh sách, tạo mới, chi tiết và cài đặt với quyền viewer chỉ đọc
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai
@@ -69,4 +71,5 @@ docker compose config
 - Signed upload/MinIO application integration
 - Production Redis job consumption and orchestration
 - Production multi-tenant Qdrant collections and vector search
-- Event dashboard và customer gallery
+- Public Event landing page và QR
+- Customer gallery

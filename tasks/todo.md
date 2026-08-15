@@ -47,12 +47,12 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 - [x] Task 2.2: Add Go persistence boundaries (bounded pgx pool; DBTX and transaction ports; rollback guarantees; sanitized error mapping; exact migration-version readiness; disposable PostgreSQL integration verification)
 - [x] Task 2.3: Implement authentication slice (Argon2id registration/login; short-lived in-memory access tokens; hashed opaque refresh-token rotation/replay rejection; scoped HttpOnly cookies; current-user/logout API and minimal Next.js UI; disposable PostgreSQL, HTTP security, and web tests)
 - [x] Task 2.4: Implement tenant authorization foundation (central owner/admin/editor/viewer permission matrix; database-fresh active membership checks; trusted request/tenant principals; non-enumerating organization endpoints; bounded request IDs and safe authorization audit records; two-tenant isolation tests; memory-only web organization context)
-- [ ] Checkpoint 2: Auth and tenant isolation
+- [x] Checkpoint 2: Auth and tenant isolation
 
 ## Phase 3 — Event management
 
-- [ ] Task 3.1: Implement Event contract and domain
-- [ ] Task 3.2: Build photographer Event UI
+- [x] Task 3.1: Implement Event contract and domain (tenant-scoped Event CRUD foundation, archive semantics, generated contract types, and trusted processing counters)
+- [x] Task 3.2: Build photographer Event UI (tenant-scoped list/create/detail/settings routes; viewer read-only controls; loading, empty, validation, and safe-error states; Vitest coverage)
 - [ ] Task 3.3: Add public Event and QR
 - [ ] Checkpoint 3: Private management and public access policy
 
