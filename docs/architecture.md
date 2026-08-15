@@ -6,15 +6,16 @@
 Browser -> Caddy -> Next.js
                -> Go API
 Go API/Worker -> Face AI (internal)
+Go API/Worker -> PostgreSQL, Redis, Qdrant, MinIO
 Face AI PoC -> Qdrant (internal benchmark collections)
-Future application data services: PostgreSQL, Redis, Qdrant, MinIO
 ```
 
 - Web owns rendering and browser interaction.
 - Go API will own public contracts, tenancy, permissions and orchestration.
 - Face AI will own model loading and inference only.
 - Photo worker will own asynchronous image processing.
-- PostgreSQL, Redis and MinIO are declared for future integration but are not used by application code yet.
+- PostgreSQL now has a versioned tenant-safe MVP schema and Compose migration gate; Go repositories and transaction orchestration remain Task 2.2.
+- Redis and MinIO are configured dependencies; Compose initializes the MinIO bucket, while application job, object, and production Qdrant integrations remain pending.
 - The Face AI PoC has a benchmark-only Qdrant adapter. It creates dedicated collections, stores opaque face/photo and dataset/Event scope identifiers, and requires both scope filters on every search. It is not the production multi-tenant vector adapter.
 
 ## Dependency direction

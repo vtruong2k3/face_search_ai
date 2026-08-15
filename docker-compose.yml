@@ -26,9 +26,11 @@ services:
       DEAD_LETTER_STREAM: ${DEAD_LETTER_STREAM:-photo-jobs-dlq}
     depends_on:
       postgres: { condition: service_healthy }
+      migrations: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       qdrant: { condition: service_healthy }
       minio: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
       face-ai: { condition: service_healthy }
     ports:
       - "${API_PORT:-8080}:8080"
@@ -82,6 +84,20 @@ services:
       retries: 5
     networks: [app]
 
+  migrations:
+    image: migrate/migrate:v4.18.3
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    networks: [app]
+    restart: "no"
+
   redis:
     image: redis:8-alpine
     command: ["redis-server", "--appendonly", "yes"]
@@ -123,6 +139,23 @@ services:
       timeout: 3s
       retries: 5
     networks: [app]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-face-search}
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [app]
+    restart: "no"
 
   caddy:
     image: caddy:2.10-alpine

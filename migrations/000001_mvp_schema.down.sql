@@ -1,0 +1,11 @@
+DROP TABLE audit_records;
+DROP TABLE download_records;
+DROP TABLE searches;
+DROP TABLE auth_sessions;
+DROP TABLE outbox_messages;
+DROP TABLE faces;
+DROP TABLE photos;
+DROP TABLE events;
+DROP TABLE organization_memberships;
+DROP TABLE organizations;
+DROP TABLE users;

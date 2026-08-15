@@ -1,14 +1,14 @@
 # Face Search AI
 
-Bộ khung monorepo cho sản phẩm Face Search AI SaaS. Giai đoạn này chỉ thiết lập ranh giới service và công cụ phát triển; chưa có auth, Event, upload, xử lý ảnh, model AI hoặc face search.
+Bộ khung monorepo cho Face Search AI gồm các service độc lập, AI PoC chạy cục bộ và nền tảng PostgreSQL có migration theo phiên bản. Authentication, Event, upload, xử lý nền, persistence của Go API và các luồng MVP vẫn đang được triển khai.
 
 ## Cấu trúc
 
 ```text
 apps/web                 Next.js + TypeScript
 apps/api                 Go HTTP API
-services/face-ai         FastAPI internal service placeholder
-workers/photo-worker     Python background worker placeholder
+services/face-ai         FastAPI internal AI PoC service
+workers/photo-worker     Python background worker scaffold
 packages/contracts       OpenAPI contracts
 infra/caddy              Local reverse proxy
 docs                     Architecture and development notes
@@ -51,12 +51,19 @@ make build
 docker compose config
 ```
 
+## Hạ tầng đã triển khai
+
+- Migration PostgreSQL up/down theo phiên bản cho users, organizations/memberships, events, photos, faces, outbox, sessions, searches, downloads và audit records
+- Ràng buộc trạng thái, idempotency và quan hệ tenant/Event ở tầng cơ sở dữ liệu
+- Compose tự chạy migration và tạo MinIO bucket theo cách idempotent trước khi khởi động API
+- `make migrate-verify` kiểm tra up/down/up trên volume PostgreSQL tách biệt và dùng một lần
+- Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
+
 ## Chưa triển khai
 
 - Authentication và authorization
-- PostgreSQL migrations/domain schema
-- Signed upload/MinIO integration
-- Redis job consumption
-- Qdrant collections và vector search
-- ONNX/InsightFace models
+- Go persistence repositories và transaction boundaries
+- Signed upload/MinIO application integration
+- Production Redis job consumption and orchestration
+- Production multi-tenant Qdrant collections and vector search
 - Event dashboard và customer gallery
