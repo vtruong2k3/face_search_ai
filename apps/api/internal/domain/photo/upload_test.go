@@ -13,13 +13,23 @@ type fakeUploadSessions struct {
 	createdUpload string
 	completed     bool
 	aborted       bool
+	createErr     error
+	findCalls     int
+	findAfterErr  UploadSession
 }
 
 func (f *fakeUploadSessions) FindActive(context.Context, string, string, string, time.Time) (UploadSession, bool, error) {
+	f.findCalls++
+	if f.createErr != nil && f.findCalls > 1 && f.findAfterErr.UploadID != "" {
+		return f.findAfterErr, true, nil
+	}
 	return f.session, f.found, nil
 }
 func (f *fakeUploadSessions) Create(_ context.Context, organizationID, eventID, photoID, uploadID string, expiresAt time.Time) (UploadSession, error) {
 	f.createdUpload = uploadID
+	if f.createErr != nil {
+		return UploadSession{}, f.createErr
+	}
 	f.session = UploadSession{OrganizationID: organizationID, EventID: eventID, PhotoID: photoID, UploadID: uploadID, Status: UploadSessionActive, ExpiresAt: expiresAt}
 	f.found = true
 	return f.session, nil
@@ -82,6 +92,21 @@ func TestInitiateUploadReusesActiveSession(t *testing.T) {
 	}
 	if result.UploadID != "existing" || storage.initiated != 0 {
 		t.Fatalf("result=%#v initiated=%d", result, storage.initiated)
+	}
+}
+
+func TestInitiateUploadReusesConcurrentSession(t *testing.T) {
+	sessions := &fakeUploadSessions{
+		createErr:    errors.New("concurrent session"),
+		findAfterErr: UploadSession{UploadID: "winner", ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	storage := &fakeMultipartStorage{}
+	result, err := uploadTestService(t, sessions, storage).Initiate(context.Background(), "org-1", "event-1", "photo-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.UploadID != "winner" || storage.initiated != 1 || storage.aborted != 1 {
+		t.Fatalf("result=%#v initiated=%d aborted=%d", result, storage.initiated, storage.aborted)
 	}
 }
 

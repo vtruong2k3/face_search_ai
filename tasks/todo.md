@@ -60,7 +60,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 - [x] Task 4.1: Define Photo lifecycle and object policy (fail-closed lifecycle transitions, server-owned opaque object keys, tenant/Event/Photo-scoped CRUD policy, soft-delete/reprocess controls, and generated contract types)
 - [x] Task 4.2: Implement signed multipart upload (bounded upload policy, tenant/Event/Photo-scoped retry-safe sessions, exact-part short-lived MinIO URLs, direct multipart completion verification, idempotent abort, reversible migration, and real disposable MinIO proof)
-- [ ] Task 4.3: Build resumable uploader UI
+- [x] Task 4.3: Build resumable uploader UI (tenant/Event-scoped Uppy multipart callbacks, direct-to-MinIO part transfer, bounded retries/concurrency, pause/resume/cancel controls, permission gating, and queue teardown on scope changes)
 - [ ] Task 4.4: Finalize and enqueue idempotently
 - [ ] Checkpoint 4: Direct upload and durable job handoff
 

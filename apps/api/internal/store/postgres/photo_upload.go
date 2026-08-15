@@ -38,16 +38,23 @@ func (r *PhotoUploadRepository) FindActive(ctx context.Context, organizationID, 
 
 func (r *PhotoUploadRepository) Create(ctx context.Context, organizationID, eventID, photoID, uploadID string, expiresAt time.Time) (photo.UploadSession, error) {
 	return queryUploadSession(ctx, r.db, `
-		WITH trusted AS (
+		WITH expired AS (
+			UPDATE photo_upload_sessions SET status = 'expired', updated_at = now()
+			WHERE organization_id = $1 AND event_id = $2 AND photo_id = $3
+				AND status = 'active' AND expires_at <= now()
+			RETURNING photo_id
+		), trusted AS (
 			UPDATE photos p SET status = 'uploading', updated_at = now()
 			FROM events e
 			WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3
 				AND p.status IN ('pending', 'uploading')
 				AND e.organization_id = p.organization_id AND e.id = p.event_id AND e.status = 'active'
 			RETURNING p.organization_id, p.event_id, p.id
+		), expired_gate AS (
+			SELECT count(*) AS count FROM expired
 		), inserted AS (
 			INSERT INTO photo_upload_sessions (organization_id, event_id, photo_id, upload_id, expires_at)
-			SELECT organization_id, event_id, id, $4, $5 FROM trusted
+			SELECT organization_id, event_id, id, $4, $5 FROM trusted CROSS JOIN expired_gate
 			RETURNING *
 		)
 		SELECT s.id, s.organization_id, s.event_id, s.photo_id, s.upload_id,

@@ -10,7 +10,7 @@ Go API/Worker -> PostgreSQL, Redis, Qdrant, MinIO
 Face AI PoC -> Qdrant (internal benchmark collections)
 ```
 
-- Web owns rendering and browser interaction.
+- Web owns rendering and browser interaction. Its authenticated Event detail surface creates one tenant/Event-scoped Uppy instance, uses API-authorized multipart callbacks, uploads parts directly to signed MinIO URLs, and destroys in-memory upload state when the scope unmounts or changes.
 - Go API will own public contracts, tenancy, permissions and orchestration.
 - Face AI will own model loading and inference only.
 - Photo worker will own asynchronous image processing.

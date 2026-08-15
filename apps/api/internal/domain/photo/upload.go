@@ -91,7 +91,14 @@ func (s *UploadService) Initiate(ctx context.Context, organizationID, eventID, p
 		session, err = s.sessions.Create(ctx, organizationID, eventID, photoID, uploadID, now.Add(s.policy.SessionTTL))
 		if err != nil {
 			_ = s.storage.Abort(ctx, item.ObjectKey, uploadID)
-			return InitiateUploadView{}, err
+			var findErr error
+			session, found, findErr = s.sessions.FindActive(ctx, organizationID, eventID, photoID, now)
+			if findErr != nil {
+				return InitiateUploadView{}, findErr
+			}
+			if !found {
+				return InitiateUploadView{}, err
+			}
 		}
 	}
 	return InitiateUploadView{PhotoID: photoID, UploadID: session.UploadID, PartSize: s.policy.PartSize, PartCount: s.policy.PartCount(item.ByteSize), ExpiresAt: session.ExpiresAt}, nil

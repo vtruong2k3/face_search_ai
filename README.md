@@ -67,11 +67,11 @@ docker compose config
 - Public Event landing page và QR dùng opaque server-generated token, limited public DTO và policy từ chối thống nhất cho Event private, archived hoặc expired
 - Photo lifecycle và object policy fail-closed với server-owned object key, tenant/Event/Photo-scoped list/detail/soft-delete/reprocess và DTO không lộ storage path
 - Signed multipart upload điều phối bởi API với session có hạn, URL từng part ngắn hạn, trình duyệt tải trực tiếp lên MinIO, xác minh size/MIME/checksum tùy chọn và abort idempotent
+- Uppy photographer UI theo phạm vi tổ chức/sự kiện với tiến độ, tạm dừng/tiếp tục, thử lại, hủy và dọn queue khi đổi phạm vi
 - Face AI PoC có pipeline InsightFace CPU và benchmark Qdrant riêng; benchmark thật vẫn chờ dataset được ủy quyền
 
 ## Chưa triển khai
 
-- Resumable photographer upload UI
-- Production Redis job consumption and orchestration
+- Durable queued-job handoff and production Redis job consumption
 - Production multi-tenant Qdrant collections and vector search
 - Customer gallery

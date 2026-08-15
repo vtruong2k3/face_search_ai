@@ -14,6 +14,11 @@ export type CreateEvent = components["schemas"]["CreateEvent"];
 export type UpdateEvent = components["schemas"]["UpdateEvent"];
 export type EventProcessingStatus = components["schemas"]["EventProcessingStatus"];
 export type PublicEvent = components["schemas"]["PublicEvent"];
+export type Photo = components["schemas"]["Photo"];
+export type CreatePhoto = components["schemas"]["CreatePhoto"];
+export type MultipartUpload = components["schemas"]["MultipartUpload"];
+export type SignedUploadPart = components["schemas"]["SignedUploadPart"];
+export type CompletedUploadPart = components["schemas"]["CompletedUploadPart"];
 
 let accessToken: string | null = null;
 
@@ -53,6 +58,38 @@ export function updateEvent(organizationId: string, eventId: string, input: Upda
 export async function archiveEvent(organizationId: string, eventId: string): Promise<void> { const response = await authRequest(`/organizations/${organizationId}/events/${eventId}`, { method: "DELETE" }); if (!response.ok) throw new Error("Event request could not be completed."); }
 export function getEventStatus(organizationId: string, eventId: string): Promise<EventProcessingStatus> { return eventRequest(`/organizations/${organizationId}/events/${eventId}/status`); }
 export async function getPublicEvent(publicToken: string): Promise<PublicEvent> { const response = await fetch(`${apiBaseUrl}/api/v1/public/events/${encodeURIComponent(publicToken)}`, { cache: "no-store" }); if (!response.ok) throw new Error("Public Event is unavailable."); return response.json() as Promise<PublicEvent>; }
+
+async function photoRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await authRequest(path, init);
+  if (!response.ok) throw new Error("Photo upload could not be completed.");
+  return response.json() as Promise<T>;
+}
+
+function photoPath(organizationId: string, eventId: string, photoId = "") {
+  const base = `/organizations/${organizationId}/events/${eventId}/photos`;
+  return photoId ? `${base}/${photoId}` : base;
+}
+
+export function createPhoto(organizationId: string, eventId: string, input: CreatePhoto): Promise<Photo> {
+  return photoRequest(photoPath(organizationId, eventId), { method: "POST", body: JSON.stringify(input) });
+}
+
+export function initiatePhotoUpload(organizationId: string, eventId: string, photoId: string, signal?: AbortSignal): Promise<MultipartUpload> {
+  return photoRequest(`${photoPath(organizationId, eventId, photoId)}/uploads`, { method: "POST", signal });
+}
+
+export function signPhotoUploadPart(organizationId: string, eventId: string, photoId: string, uploadId: string, partNumber: number, signal?: AbortSignal): Promise<SignedUploadPart> {
+  return photoRequest(`${photoPath(organizationId, eventId, photoId)}/uploads/parts/${partNumber}`, { method: "POST", body: JSON.stringify({ uploadId }), signal });
+}
+
+export function completePhotoUpload(organizationId: string, eventId: string, photoId: string, uploadId: string, parts: CompletedUploadPart[], signal?: AbortSignal): Promise<Photo> {
+  return photoRequest(`${photoPath(organizationId, eventId, photoId)}/uploads/complete`, { method: "POST", body: JSON.stringify({ uploadId, parts }), signal });
+}
+
+export async function abortPhotoUpload(organizationId: string, eventId: string, photoId: string, uploadId: string, signal?: AbortSignal): Promise<void> {
+  const response = await authRequest(`${photoPath(organizationId, eventId, photoId)}/uploads/abort`, { method: "POST", body: JSON.stringify({ uploadId }), signal });
+  if (!response.ok) throw new Error("Photo upload could not be cancelled.");
+}
 
 export async function getApiHealth(): Promise<HealthResponse> {
   const response = await fetch(`${apiBaseUrl}/health/ready`, {
