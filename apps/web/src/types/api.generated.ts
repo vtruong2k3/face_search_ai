@@ -365,7 +365,11 @@ export interface paths {
         /** Get an eligible public Event */
         get: operations["getPublicEvent"];
         put?: never;
-        post?: never;
+        /**
+         * Search an eligible public Event with an ephemeral selfie
+         * @description Requires affirmative consent and exactly one detected face. The selfie is processed in memory for this request only and must not be persisted, logged, audited, traced, or returned. Unknown, private, archived, and expired Events are intentionally indistinguishable.
+         */
+        post: operations["searchPublicEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -447,6 +451,34 @@ export interface components {
             /** Format: date-time */
             expiresAt: string | null;
             downloadsEnabled: boolean;
+        };
+        /** @description Ephemeral customer query. The server accepts one bounded image part, requires affirmative consent, and never stores the selfie bytes. */
+        PublicSearchRequest: {
+            /**
+             * Format: binary
+             * @description JPEG, PNG, or WebP selfie; maximum 10 MiB.
+             */
+            selfie: string;
+            /**
+             * @description Must be the literal multipart value true.
+             * @constant
+             */
+            consent: "true";
+            consentVersion: string;
+        };
+        PublicSearchResponse: {
+            results: components["schemas"]["PublicSearchResult"][];
+            nextCursor: string | null;
+        };
+        /** @description Opaque Event-scoped photo identity only. Original files, storage keys, signed URLs, embeddings, face identifiers, scores, and uploader data are intentionally excluded until separately authorized by a download contract. */
+        PublicSearchResult: {
+            /** Format: uuid */
+            photoId: string;
+        };
+        SearchError: {
+            /** @enum {string} */
+            code: "consent_required" | "invalid_image" | "unsupported_media_type" | "selfie_too_large" | "face_count_zero" | "face_count_multiple" | "invalid_cursor";
+            message: string;
         };
         EventProcessingStatus: {
             /** Format: uuid */
@@ -555,6 +587,42 @@ export interface components {
         };
         /** @description Resource was not found or is not available to the caller */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Request body exceeds the bounded selfie-search limit */
+        PayloadTooLarge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Selfie or consent does not satisfy the privacy search policy */
+        SearchPolicyRejected: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SearchError"];
+            };
+        };
+        /** @description Search rate limit exceeded */
+        RateLimited: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Search dependencies are temporarily unavailable */
+        ServiceUnavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1153,6 +1221,38 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    searchPublicEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["PublicSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Event-scoped photo matches without storage or biometric data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSearchResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["PayloadTooLarge"];
+            422: components["responses"]["SearchPolicyRejected"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
 }

@@ -75,7 +75,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 ## Phase 6 — Customer selfie search
 
-- [ ] Task 6.1: Define privacy-preserving search contract
+- [x] Task 6.1: Define privacy-preserving search contract
 - [ ] Task 6.2: Implement ephemeral Event-scoped search
 - [ ] Task 6.3: Build selfie and gallery UI
 - [ ] Task 6.4: Implement controlled downloads

@@ -383,6 +383,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PublicEvent" }
         "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      summary: Search an eligible public Event with an ephemeral selfie
+      description: >-
+        Requires affirmative consent and exactly one detected face. The selfie is
+        processed in memory for this request only and must not be persisted,
+        logged, audited, traced, or returned. Unknown, private, archived, and
+        expired Events are intentionally indistinguishable.
+      operationId: searchPublicEvent
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/PublicSearchRequest" }
+            encoding:
+              selfie:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        "200":
+          description: Event-scoped photo matches without storage or biometric data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicSearchResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "422": { $ref: "#/components/responses/SearchPolicyRejected" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 components:
   parameters:
     OrganizationId:
@@ -426,6 +455,26 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
       description: Resource was not found or is not available to the caller
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PayloadTooLarge:
+      description: Request body exceeds the bounded selfie-search limit
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SearchPolicyRejected:
+      description: Selfie or consent does not satisfy the privacy search policy
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/SearchError" }
+    RateLimited:
+      description: Search rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServiceUnavailable:
+      description: Search dependencies are temporarily unavailable
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -516,6 +565,59 @@ components:
         name: { type: string }
         expiresAt: { type: [string, "null"], format: date-time }
         downloadsEnabled: { type: boolean }
+    PublicSearchRequest:
+      type: object
+      additionalProperties: false
+      required: [selfie, consent, consentVersion]
+      description: >-
+        Ephemeral customer query. The server accepts one bounded image part,
+        requires affirmative consent, and never stores the selfie bytes.
+      properties:
+        selfie:
+          type: string
+          format: binary
+          description: JPEG, PNG, or WebP selfie; maximum 10 MiB.
+          contentMediaType: image/jpeg
+          maxLength: 10485760
+        consent:
+          type: string
+          const: "true"
+          description: Must be the literal multipart value true.
+        consentVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+    PublicSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [results, nextCursor]
+      properties:
+        results:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PublicSearchResult" }
+        nextCursor:
+          type: [string, "null"]
+          maxLength: 512
+    PublicSearchResult:
+      type: object
+      additionalProperties: false
+      required: [photoId]
+      description: >-
+        Opaque Event-scoped photo identity only. Original files, storage keys,
+        signed URLs, embeddings, face identifiers, scores, and uploader data are
+        intentionally excluded until separately authorized by a download contract.
+      properties:
+        photoId: { type: string, format: uuid }
+    SearchError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [consent_required, invalid_image, unsupported_media_type, selfie_too_large, face_count_zero, face_count_multiple, invalid_cursor]
+        message: { type: string }
     EventProcessingStatus:
       type: object
       additionalProperties: false
