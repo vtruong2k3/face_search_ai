@@ -19,6 +19,19 @@ type checker struct{ statuses map[string]platform.Status }
 
 func (c checker) Check(context.Context) map[string]platform.Status { return c.statuses }
 
+// recordingChecker fails the test if its dependency check is ever invoked. It
+// proves liveness reflects only process health and never probes dependencies.
+type recordingChecker struct {
+	t      *testing.T
+	called bool
+}
+
+func (c *recordingChecker) Check(context.Context) map[string]platform.Status {
+	c.called = true
+	c.t.Fatal("liveness must not invoke dependency checks")
+	return nil
+}
+
 // rejectingAuthRepository fails every lookup so login always returns a generic
 // authentication failure; it lets the router-level rate-limit test drive the
 // login route without a database.
@@ -50,6 +63,41 @@ func TestHealthEndpoints(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s returned %d", path, recorder.Code)
 		}
+	}
+}
+
+func TestLivenessDoesNotProbeDependencies(t *testing.T) {
+	// Liveness must be independent of dependency readiness: a checker that would
+	// panic on use proves /health/live never calls it.
+	router := httpserver.NewRouter(&recordingChecker{t: t})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health/live", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("liveness returned %d", recorder.Code)
+	}
+}
+
+func TestMetricsEndpointExposesBoundedRequestSeries(t *testing.T) {
+	router := httpserver.NewRouter(checker{statuses: map[string]platform.Status{"redis": {OK: true}}})
+
+	// Drive a request through a known route so its bounded series is recorded.
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health/live", nil))
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("metrics returned %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "http_requests_total") {
+		t.Fatalf("metrics must expose http_requests_total, got:\n%s", body)
+	}
+	// The route label must be a bounded template/path, and status a class, not a raw code.
+	if !strings.Contains(body, `route="/health/live"`) {
+		t.Fatalf("metrics must label the bounded route template, got:\n%s", body)
+	}
+	if !strings.Contains(body, `status_class="2xx"`) {
+		t.Fatalf("metrics must label a bounded status class, got:\n%s", body)
 	}
 }
 

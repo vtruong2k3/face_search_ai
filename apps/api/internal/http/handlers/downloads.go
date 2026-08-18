@@ -9,6 +9,7 @@ import (
 	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/domain/download"
 	"github.com/face-search-ai/api/internal/http/middleware"
+	"github.com/face-search-ai/api/internal/observability"
 	"github.com/face-search-ai/api/internal/ratelimit"
 )
 
@@ -43,6 +44,7 @@ func (h *Downloads) Public(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("publicToken")
 
 	if h.limiter != nil && !h.limiter.Allow(token+"|"+middleware.ClientIP(r)) {
+		observability.RecordRateLimitRejection("download")
 		h.audit(r, "", "", "download.rate_limited", authorization.AuditDenied, map[string]string{"reason": "rate_limited"})
 		writeAuthError(w, http.StatusTooManyRequests, "rate_limited", "Too many download requests. Please try again shortly.")
 		return
@@ -94,6 +96,9 @@ func (h *Downloads) auditResult(r *http.Request, result download.Result) {
 	} else {
 		metadata["count"] = strconv.Itoa(len(result.Grants))
 	}
+	// Decision and kind are bounded, low-cardinality classes; no token, URL, object
+	// path, or photo identifier is recorded as a metric label.
+	observability.RecordDownloadDecision(string(result.Decision), string(result.Kind))
 	h.audit(r, result.OrganizationID, result.EventID, action, outcome, metadata)
 }
 

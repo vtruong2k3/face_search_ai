@@ -7,6 +7,7 @@ import (
 	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/domain/photo"
 	"github.com/face-search-ai/api/internal/http/middleware"
+	"github.com/face-search-ai/api/internal/observability"
 )
 
 type Photos struct {
@@ -45,6 +46,7 @@ func (h *Photos) InitiateUpload(w http.ResponseWriter, r *http.Request) {
 		h.writeUnavailable(w)
 		return
 	}
+	observability.RecordUploadOperation("initiate")
 	h.audit(r, tenant, "photo.upload.initiate", result.PhotoID, authorization.AuditSuccess)
 	writeAuthJSON(w, http.StatusOK, result)
 }
@@ -87,6 +89,7 @@ func (h *Photos) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		h.writeUnavailable(w)
 		return
 	}
+	observability.RecordUploadOperation("complete")
 	h.audit(r, tenant, "photo.upload.complete", result.ID, authorization.AuditSuccess)
 	writeAuthJSON(w, http.StatusOK, result)
 }
@@ -105,6 +108,7 @@ func (h *Photos) AbortUpload(w http.ResponseWriter, r *http.Request) {
 		h.writeUnavailable(w)
 		return
 	}
+	observability.RecordUploadOperation("abort")
 	h.audit(r, tenant, "photo.upload.abort", r.PathValue("photoId"), authorization.AuditSuccess)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -129,6 +133,7 @@ func (h *Photos) Create(w http.ResponseWriter, r *http.Request) {
 		h.writeUnavailable(w)
 		return
 	}
+	observability.RecordUploadOperation("create")
 	h.audit(r, tenant, "photo.create", created.ID, authorization.AuditSuccess)
 	writeAuthJSON(w, http.StatusCreated, created)
 }
@@ -183,6 +188,7 @@ func (h *Photos) Reprocess(w http.ResponseWriter, r *http.Request) {
 		h.writeUnavailable(w)
 		return
 	}
+	observability.RecordUploadOperation("reprocess")
 	h.audit(r, tenant, "photo.reprocess", result.ID, authorization.AuditSuccess)
 	writeAuthJSON(w, http.StatusOK, result)
 }

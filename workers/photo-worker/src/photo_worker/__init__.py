@@ -5,6 +5,7 @@ import redis.asyncio as redis
 import structlog
 
 from photo_worker.consumer import WorkerConsumer
+from photo_worker.observability import HealthServer
 from photo_worker.settings import Settings
 
 log = structlog.get_logger()
@@ -14,9 +15,12 @@ async def run() -> None:
     settings = Settings()
     client = redis.from_url(settings.redis_url, decode_responses=False)
     consumer = WorkerConsumer(client=client, settings=settings)
+    health = HealthServer(settings.health_host, settings.health_port, consumer.is_ready)
+    health.start()
     try:
         await consumer.start()
     finally:
+        health.stop()
         await client.aclose()
 
 

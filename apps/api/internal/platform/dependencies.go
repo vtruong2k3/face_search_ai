@@ -3,9 +3,11 @@ package platform
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/face-search-ai/api/internal/config"
 	"github.com/face-search-ai/api/internal/domain/auth"
@@ -15,6 +17,7 @@ import (
 	"github.com/face-search-ai/api/internal/domain/photo"
 	"github.com/face-search-ai/api/internal/domain/search"
 	"github.com/face-search-ai/api/internal/downloadinfra"
+	"github.com/face-search-ai/api/internal/observability"
 	"github.com/face-search-ai/api/internal/ratelimit"
 	"github.com/face-search-ai/api/internal/searchinfra"
 	"github.com/face-search-ai/api/internal/storage/objectstorage"
@@ -189,10 +192,24 @@ func (d *Dependencies) Check(ctx context.Context) map[string]Status {
 			defer wg.Done()
 			checkCtx, cancel := context.WithTimeout(ctx, d.cfg.DependencyTimeout)
 			defer cancel()
+			started := time.Now()
 			err := check(checkCtx)
+			latency := time.Since(started)
+
+			// Emit sanitized, actionable telemetry: the fixed dependency name, a
+			// healthy/unhealthy result, and a latency class gauge/histogram. The raw
+			// error is deliberately never exported as a metric label/value or logged,
+			// because it can contain a connection string, URL, or credential.
+			observability.RecordDependencyCheck(name, err == nil, latency)
+
 			status := Status{OK: err == nil}
 			if err != nil {
-				status.Error = err.Error()
+				// The readiness endpoint is reachable through the edge proxy, so the
+				// per-dependency detail is reduced to a uniform, non-leaking token. The
+				// dependency name (the map key) already tells operators which dependency
+				// is unhealthy, which is the actionable part.
+				status.Error = "unavailable"
+				slog.Warn("dependency unhealthy", "dependency", name, "latency_ms", latency.Milliseconds())
 			}
 			mu.Lock()
 			result[name] = status

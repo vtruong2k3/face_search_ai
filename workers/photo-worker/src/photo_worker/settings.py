@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     redis_group: str = "photo-workers"
     worker_name: str = "photo-worker-1"
     dead_letter_stream: str = "photo-jobs-dlq"
+
+    # Internal health/metrics surface. Bound to all interfaces inside the Docker
+    # network only; it is never routed through the public reverse proxy.
+    health_host: str = "0.0.0.0"
+    health_port: int = 9100
     face_ai_url: str = "http://localhost:8001"
     face_ai_internal_token: str = ""
     face_ai_timeout_s: float = 30.0

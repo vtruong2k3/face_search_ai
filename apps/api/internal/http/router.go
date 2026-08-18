@@ -40,7 +40,7 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 		// surfaces, so they are rate limited per client address. Logout and me are
 		// bounded by the caller's own session and left unthrottled.
 		authLimited := func(handler http.HandlerFunc) http.Handler {
-			return middleware.RateLimit(controls.AuthLimiter, middleware.ClientIPKey, handler)
+			return middleware.RateLimit(controls.AuthLimiter, middleware.ClientIPKey, "auth", handler)
 		}
 		mux.Handle("POST /api/v1/auth/register", authLimited(authHandler.Register))
 		mux.Handle("POST /api/v1/auth/login", authLimited(authHandler.Login))
@@ -61,7 +61,7 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 		// combined with client address. The token path value is populated by the mux
 		// before this wrapped handler runs.
 		searchKey := func(r *http.Request) string { return r.PathValue("publicToken") + "|" + middleware.ClientIP(r) }
-		mux.Handle("POST /api/v1/public/events/{publicToken}", middleware.RateLimit(controls.SearchLimiter, searchKey, http.HandlerFunc(searchHandler.Public)))
+		mux.Handle("POST /api/v1/public/events/{publicToken}", middleware.RateLimit(controls.SearchLimiter, searchKey, "search", http.HandlerFunc(searchHandler.Public)))
 	}
 	if downloadsHandler != nil {
 		mux.HandleFunc("POST /api/v1/public/events/{publicToken}/downloads", downloadsHandler.Public)
@@ -90,8 +90,10 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 	}
 	// Compose outermost first: every response (including CORS rejections, rate-limit
 	// 429s, and timeout 503s) carries a request ID and the API security headers, and
-	// is bounded by the per-request timeout.
-	handler := middleware.Timeout(controls.RequestTimeout, mux)
+	// is bounded by the per-request timeout. Metrics wraps the mux directly (innermost)
+	// so the matched, bounded route template is available when the handler returns.
+	handler := middleware.Metrics(mux)
+	handler = middleware.Timeout(controls.RequestTimeout, handler)
 	handler = middleware.CORS(controls.WebOrigin, handler)
 	handler = middleware.RequestLog(handler)
 	handler = middleware.SecurityHeaders(handler)

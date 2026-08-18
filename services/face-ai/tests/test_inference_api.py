@@ -186,6 +186,27 @@ def test_extract_faces_requires_token_when_configured(monkeypatch) -> None:
     assert correct.status_code == 200
 
 
+def test_metrics_endpoint_exposes_bounded_inference_outcomes() -> None:
+    client = make_client(build_stub_pipeline())
+
+    ok = _post(client, make_image_bytes())
+    assert ok.status_code == 200
+
+    not_ready_client = make_client(None)
+    not_ready = _post(not_ready_client, make_image_bytes())
+    assert not_ready.status_code == 503
+
+    metrics = client.get("/metrics")
+    assert metrics.status_code == 200
+    body = metrics.text
+    # Inference metrics are exposed and labeled only by a bounded outcome class.
+    assert "face_ai_inference_requests_total" in body
+    assert 'outcome="ok"' in body
+    assert 'outcome="not_ready"' in body
+    # No image, embedding, or identifier is ever present as a label.
+    assert "embedding" not in body
+
+
 def test_extract_faces_does_not_log_embeddings_or_image_bytes() -> None:
     client = make_client(build_stub_pipeline())
     image_bytes = make_image_bytes()

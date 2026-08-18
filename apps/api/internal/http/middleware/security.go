@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/face-search-ai/api/internal/observability"
 	"github.com/face-search-ai/api/internal/ratelimit"
 )
 
@@ -34,12 +35,16 @@ type KeyFunc func(*http.Request) string
 // RateLimit rejects requests that exceed the limiter's budget for their key with a
 // safe 429 that never exposes internal detail. A nil or disabled limiter passes
 // every request through, keeping the middleware safe to compose unconditionally.
-func RateLimit(limiter *ratelimit.Limiter, key KeyFunc, next http.Handler) http.Handler {
+// The surface is a bounded, low-cardinality label (for example "auth" or
+// "search") used only to attribute the rejection metric; it is never derived from
+// request content.
+func RateLimit(limiter *ratelimit.Limiter, key KeyFunc, surface string, next http.Handler) http.Handler {
 	if limiter == nil {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow(key(r)) {
+			observability.RecordRateLimitRejection(surface)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = w.Write([]byte("{\"code\":\"rate_limited\",\"message\":\"Too many requests. Please try again shortly.\"}\n"))

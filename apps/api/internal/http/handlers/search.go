@@ -4,8 +4,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/face-search-ai/api/internal/domain/search"
+	"github.com/face-search-ai/api/internal/observability"
 )
 
 const maxSearchRequestBytes = search.MaxSelfieBytes + 64*1024
@@ -20,13 +22,21 @@ type publicSearchResponse struct {
 }
 
 func (h *Search) Public(w http.ResponseWriter, r *http.Request) {
+	// outcome is a bounded class recorded with the request latency. It never
+	// contains the token, selfie, or any embedding.
+	started := time.Now()
+	outcome := "ok"
+	defer func() { observability.RecordSearch(outcome, time.Since(started)) }()
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxSearchRequestBytes)
 	if err := r.ParseMultipartForm(maxSearchRequestBytes); err != nil {
 		var maxBytes *http.MaxBytesError
 		if errors.As(err, &maxBytes) {
+			outcome = string(search.CodeSelfieTooLarge)
 			writeSearchError(w, http.StatusRequestEntityTooLarge, string(search.CodeSelfieTooLarge), "The selfie is too large.")
 			return
 		}
+		outcome = "invalid_request"
 		writeSearchError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
 		return
 	}
@@ -34,11 +44,13 @@ func (h *Search) Public(w http.ResponseWriter, r *http.Request) {
 	consentVersion := r.FormValue("consentVersion")
 	file, header, err := r.FormFile("selfie")
 	if err != nil {
+		outcome = string(search.CodeInvalidImage)
 		writeSearchError(w, http.StatusUnprocessableEntity, string(search.CodeInvalidImage), "A valid selfie is required.")
 		return
 	}
 	defer file.Close()
 	if header.Size > search.MaxSelfieBytes {
+		outcome = string(search.CodeSelfieTooLarge)
 		writeSearchError(w, http.StatusRequestEntityTooLarge, string(search.CodeSelfieTooLarge), "The selfie is too large.")
 		return
 	}
@@ -48,6 +60,7 @@ func (h *Search) Public(w http.ResponseWriter, r *http.Request) {
 	}
 	selfie, err := io.ReadAll(io.LimitReader(file, search.MaxSelfieBytes+1))
 	if err != nil {
+		outcome = "invalid_request"
 		writeSearchError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
 		return
 	}
@@ -55,15 +68,35 @@ func (h *Search) Public(w http.ResponseWriter, r *http.Request) {
 		for i := range selfie {
 			selfie[i] = 0
 		}
+		outcome = string(search.CodeSelfieTooLarge)
 		writeSearchError(w, http.StatusRequestEntityTooLarge, string(search.CodeSelfieTooLarge), "The selfie is too large.")
 		return
 	}
 	results, err := h.service.Search(r.Context(), r.PathValue("publicToken"), contentType, selfie, consent, consentVersion)
 	if err != nil {
+		outcome = searchOutcome(err)
 		writePublicSearchFailure(w, err)
 		return
 	}
 	writeAuthJSON(w, http.StatusOK, publicSearchResponse{Results: results, NextCursor: nil})
+}
+
+// searchOutcome maps a search failure to a bounded outcome class for metrics. It
+// mirrors the HTTP mapping in writePublicSearchFailure and never returns
+// unbounded detail.
+func searchOutcome(err error) string {
+	var policy search.PolicyError
+	var faces search.FaceCountError
+	switch {
+	case errors.As(err, &policy):
+		return string(policy.Code)
+	case errors.As(err, &faces):
+		return string(faces.Code())
+	case errors.Is(err, search.ErrUnavailable):
+		return "service_unavailable"
+	default:
+		return "not_found"
+	}
 }
 
 func writePublicSearchFailure(w http.ResponseWriter, err error) {

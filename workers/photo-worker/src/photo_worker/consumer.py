@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -9,6 +10,7 @@ from psycopg_pool import ConnectionPool
 from qdrant_client import QdrantClient
 from redis.exceptions import ResponseError
 
+from photo_worker import observability
 from photo_worker.errors import TerminalProcessingError
 from photo_worker.face_ai import FaceAIClient
 from photo_worker.image import ImageProcessor
@@ -33,6 +35,7 @@ class WorkerConsumer:
         self.settings = settings
         self.processor = processor
         self._running = False
+        self._ready = False
         self._semaphore = asyncio.Semaphore(settings.max_concurrency)
         self._active_tasks: set[asyncio.Task[None]] = set()
 
@@ -97,9 +100,15 @@ class WorkerConsumer:
             if "BUSYGROUP" not in str(error):
                 raise
 
+    def is_ready(self) -> bool:
+        """Readiness reflects that the consumer connected to Redis and joined its
+        group. It is intentionally distinct from liveness (process running)."""
+        return self._ready
+
     async def start(self) -> None:
         self._running = True
         await self.setup_group()
+        self._ready = True
         log.info(
             "worker_consumer_started",
             worker=self.settings.worker_name,
@@ -117,6 +126,7 @@ class WorkerConsumer:
             log.info("worker_consumer_stopping")
         finally:
             self._running = False
+            self._ready = False
             autoclaim_task.cancel()
             read_task.cancel()
             await asyncio.gather(autoclaim_task, read_task, return_exceptions=True)
@@ -132,6 +142,7 @@ class WorkerConsumer:
 
     def stop(self) -> None:
         self._running = False
+        self._ready = False
 
     async def _read_loop(self) -> None:
         while self._running:
@@ -221,6 +232,7 @@ class WorkerConsumer:
             job = JobEnvelope.from_stream(fields)
         except Exception as parse_error:
             log.error("job_parse_failed", message_id=message_id, error=str(parse_error))
+            observability.record_failed("unknown", "parse_error")
             await self._dead_letter(message_id, fields, str(parse_error))
             return
 
@@ -228,6 +240,7 @@ class WorkerConsumer:
         if isinstance(job.payload, PhotoProcessingPayload):
             correlation_id = job.payload.photo_id
 
+        started = time.perf_counter()
         attempt = 0
         while attempt < self.settings.max_retries:
             attempt += 1
@@ -238,6 +251,7 @@ class WorkerConsumer:
                     await self.default_process(job)
 
                 await self.client.xack(self.settings.redis_stream, self.settings.redis_group, message_id)
+                observability.record_processed(job.type, time.perf_counter() - started)
                 log.info("job_processed_successfully", message_id=message_id, correlation_id=correlation_id, type=job.type)
                 return
             except TerminalProcessingError as err:
@@ -247,6 +261,7 @@ class WorkerConsumer:
                     correlation_id=correlation_id,
                     error=str(err),
                 )
+                observability.record_failed(job.type, "terminal")
                 try:
                     await self._fail_terminal_photo(job, err)
                     await self.client.xack(self.settings.redis_stream, self.settings.redis_group, message_id)
@@ -263,9 +278,11 @@ class WorkerConsumer:
                     error=str(err),
                 )
                 if attempt < self.settings.max_retries:
+                    observability.record_retried(job.type)
                     backoff_s = min(2 ** (attempt - 1), 30)
                     await asyncio.sleep(backoff_s)
                 else:
+                    observability.record_failed(job.type, "exhausted")
                     await self._dead_letter(message_id, fields, str(err))
 
     async def _dead_letter(self, message_id: str, fields: dict[Any, Any], error: str) -> None:
@@ -284,6 +301,7 @@ class WorkerConsumer:
             # Redis xadd expects keys and values to be bytes, string, int, float
             await self.client.xadd(self.settings.dead_letter_stream, dlq_fields)  # type: ignore[arg-type]
             await self.client.xack(self.settings.redis_stream, self.settings.redis_group, message_id)
+            observability.record_dead_lettered()
             log.error("job_sent_to_dlq", message_id=message_id, error=error[:256])
         except Exception as dlq_err:
             log.error("failed_to_dead_letter", message_id=message_id, error=str(dlq_err))

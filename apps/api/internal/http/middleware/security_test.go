@@ -31,7 +31,7 @@ func TestSecurityHeadersSetsConservativeDefaults(t *testing.T) {
 }
 
 func TestRateLimitAllowsUnderLimitThenReturns429(t *testing.T) {
-	handler := RateLimit(ratelimit.New(1, time.Minute), ClientIPKey, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RateLimit(ratelimit.New(1, time.Minute), ClientIPKey, "test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -52,7 +52,7 @@ func TestRateLimitAllowsUnderLimitThenReturns429(t *testing.T) {
 }
 
 func TestRateLimitIsolatesKeys(t *testing.T) {
-	handler := RateLimit(ratelimit.New(1, time.Minute), ClientIPKey, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RateLimit(ratelimit.New(1, time.Minute), ClientIPKey, "test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	for _, address := range []string{"10.0.0.1:1", "10.0.0.2:1"} {
@@ -68,7 +68,7 @@ func TestRateLimitIsolatesKeys(t *testing.T) {
 
 func TestRateLimitNilLimiterIsPassthrough(t *testing.T) {
 	called := 0
-	handler := RateLimit(nil, ClientIPKey, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RateLimit(nil, ClientIPKey, "test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called++
 		w.WriteHeader(http.StatusOK)
 	}))

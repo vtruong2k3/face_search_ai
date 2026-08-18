@@ -39,6 +39,37 @@ Deliberate request, rate, and browser-policy controls are matched to each endpoi
 
 Decision — deferred full web CSP: the web CSP deliberately omits a restrictive `default-src`/`script-src`/`connect-src`. Next.js hydration relies on inline bootstrap scripts and styles, and the browser connects to env-driven API and MinIO origins (selfie POST, direct multipart upload to signed URLs, signed downloads). A complete allow-list or nonce-based CSP would break hydration, camera capture, uploads, or downloads unless origins are finalized and a nonce middleware is added; that hardening is deferred to a release-readiness task. The shipped directives still block clickjacking, base-tag injection, and legacy plugin/object embedding.
 
+## Observability and operational health
+
+Every service separates liveness from readiness deliberately. Liveness
+(`/health/live`) reflects only that the process is running and performs no
+dependency calls; readiness (`/health/ready`) reflects whether the service can do
+useful work. The Go API readiness probes Postgres, Redis, MinIO, Qdrant, and Face
+AI concurrently; Face AI readiness reflects model-runtime load; the worker readiness
+reflects that it connected to Redis and joined its consumer group. The API readiness
+body reduces each dependency's detail to a uniform `unavailable` token so the
+publicly proxied endpoint cannot leak a connection string or URL — the dependency
+name (the map key) is the actionable part.
+
+Each service exposes an internal `/metrics` endpoint (API `:8080`, Face AI `:8001`,
+worker `:9100`). None is routed through the public reverse proxy: Caddy proxies only
+the web app and the `/api` and `/health` surfaces. A minimal, loopback-bound
+Prometheus service scrapes them on the Docker network (`infra/prometheus/prometheus.yml`);
+Grafana is a documented follow-up rather than a bundled dependency.
+
+All telemetry is privacy-safe. Metric labels are bounded and low-cardinality only:
+HTTP method, matched route template, status class; upload operation; search outcome
+class; download decision/kind; rate-limit surface; dependency name and healthy/
+unhealthy result; worker job type and failure reason. No label or logged value ever
+carries a raw user, organization, event, photo, or token identifier, a signed URL,
+an object path, a credential, a face embedding, or image bytes. Correlation
+identifiers (request id, job id, photo id) appear only as structured-log fields for
+tracing a single operation, never as metric labels. Dependency-check outcomes emit
+sanitized, actionable signals: a `dependency_up` gauge, a check-latency histogram,
+and a warning log carrying only the dependency name and a latency figure. Operational
+runbooks for reading these signals and responding to dependency-down, high-error-rate,
+queue-backlog/DLQ, and rate-limit-spike incidents live in `docs/runbooks.md`.
+
 ## Dependency direction
 
 Public clients never call Face AI directly. AI and worker services are internal to the Docker network. Business contracts begin under `/api/v1`; health checks remain outside the versioned prefix.

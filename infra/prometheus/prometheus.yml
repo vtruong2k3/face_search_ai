@@ -1,0 +1,27 @@
+# Minimal Prometheus scrape configuration for local/operator observability.
+#
+# Every target is an INTERNAL service reachable only on the Compose "app" network.
+# None of these /metrics endpoints is routed through the public reverse proxy
+# (Caddy proxies only the web app and the /api and /health surfaces). The metrics
+# themselves are privacy-safe: every series is labeled only by bounded dimensions
+# (method, route template, status class, operation/outcome/decision, dependency,
+# job type) and never by a raw user, event, photo, token, URL, or embedding.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8080"]
+
+  - job_name: face-ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["face-ai:8001"]
+
+  - job_name: photo-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["photo-worker:9100"]
