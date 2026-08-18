@@ -31,6 +31,7 @@ func main() {
 	eventsHandler := handlers.NewEvents(dependencies.EventService(), dependencies.AuthorizationService())
 	photosHandler := handlers.NewPhotos(dependencies.PhotoService(), dependencies.PhotoUploadService(), dependencies.AuthorizationService())
 	searchHandler := handlers.NewSearch(dependencies.SearchService())
+	downloadsHandler := handlers.NewDownloads(dependencies.DownloadService(), dependencies.DownloadLimiter(), dependencies.AuthorizationService())
 	server := &http.Server{
 		Addr: cfg.Address(),
 		Handler: httpserver.NewRouterWithAuth(
@@ -41,6 +42,7 @@ func main() {
 			eventsHandler,
 			photosHandler,
 			searchHandler,
+			downloadsHandler,
 			cfg.WebOrigin,
 		),
 		ReadHeaderTimeout: 5 * time.Second,

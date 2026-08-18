@@ -412,6 +412,42 @@ paths:
         "422": { $ref: "#/components/responses/SearchPolicyRejected" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /public/events/{publicToken}/downloads:
+    parameters:
+      - name: publicToken
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+    post:
+      summary: Issue short-lived download links for scoped Event photos
+      description: >-
+        Customer download authorization derives only from the opaque public Event
+        token, the Event download policy, and result scope. The server re-resolves
+        the Event scope on every request, requires downloads to be enabled, and
+        confirms each requested photo belongs to the resolved Event and is in a
+        downloadable (READY) state before signing access. Each returned link is a
+        short-lived, object-scoped signed URL that expires and cannot be replayed
+        for any other object, Event, or tenant. No grant token is persisted or
+        returned. Unknown, private, archived, and expired Events and Events with
+        downloads disabled are intentionally indistinguishable. Requests are rate
+        limited and audited without recording signed URLs, object paths, or tokens.
+      operationId: issuePublicDownloads
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublicDownloadRequest" }
+      responses:
+        "200":
+          description: Short-lived download links for the requested in-scope photos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicDownloadResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 components:
   parameters:
     OrganizationId:
@@ -544,7 +580,20 @@ components:
     Event:
       type: object
       additionalProperties: false
-      required: [id, organizationId, name, visibility, status, expiresAt, downloadsEnabled, matchThreshold, createdByUserId, createdAt, updatedAt]
+      required:
+        [
+          id,
+          organizationId,
+          name,
+          visibility,
+          status,
+          expiresAt,
+          downloadsEnabled,
+          matchThreshold,
+          createdByUserId,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         organizationId: { type: string, format: uuid }
@@ -609,6 +658,43 @@ components:
         intentionally excluded until separately authorized by a download contract.
       properties:
         photoId: { type: string, format: uuid }
+    PublicDownloadRequest:
+      type: object
+      additionalProperties: false
+      required: [photoIds]
+      description: >-
+        Bounded set of Event-scoped photo identifiers to download. Identifiers
+        come from a prior selfie search for the same public Event. The request is
+        rejected uniformly when any identifier is not part of the resolved Event
+        or is not in a downloadable state.
+      properties:
+        photoIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    PublicDownloadResponse:
+      type: object
+      additionalProperties: false
+      required: [downloads]
+      properties:
+        downloads:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/PublicDownload" }
+    PublicDownload:
+      type: object
+      additionalProperties: false
+      required: [photoId, url, expiresAt]
+      description: >-
+        A single short-lived, object-scoped download link. The URL is signed for
+        exactly one stored original and expires at expiresAt; it grants no other
+        access and is never logged or audited.
+      properties:
+        photoId: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
     SearchError:
       type: object
       additionalProperties: false
@@ -616,12 +702,33 @@ components:
       properties:
         code:
           type: string
-          enum: [consent_required, invalid_image, unsupported_media_type, selfie_too_large, face_count_zero, face_count_multiple, invalid_cursor]
+          enum:
+            [
+              consent_required,
+              invalid_image,
+              unsupported_media_type,
+              selfie_too_large,
+              face_count_zero,
+              face_count_multiple,
+              invalid_cursor,
+            ]
         message: { type: string }
     EventProcessingStatus:
       type: object
       additionalProperties: false
-      required: [eventId, activeTotal, pending, uploading, uploaded, queued, processing, ready, failed, deleted]
+      required:
+        [
+          eventId,
+          activeTotal,
+          pending,
+          uploading,
+          uploaded,
+          queued,
+          processing,
+          ready,
+          failed,
+          deleted,
+        ]
       properties:
         eventId: { type: string, format: uuid }
         activeTotal: { type: integer, minimum: 0 }
@@ -692,7 +799,17 @@ components:
     Photo:
       type: object
       additionalProperties: false
-      required: [id, eventId, originalFilename, contentType, byteSize, status, createdAt, updatedAt]
+      required:
+        [
+          id,
+          eventId,
+          originalFilename,
+          contentType,
+          byteSize,
+          status,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         eventId: { type: string, format: uuid }

@@ -33,6 +33,10 @@ type Config struct {
 	// Checkpoint 1 benchmark. Sourced from SEARCH_NON_PRODUCTION_THRESHOLD.
 	SearchThreshold     float32
 	SearchResultLimit   int
+	DownloadURLTTL      time.Duration
+	DownloadMaxBulk     int
+	DownloadRateLimit   int
+	DownloadRateWindow  time.Duration
 	DependencyTimeout   time.Duration
 	AuthSigningKey      string
 	AuthIssuer          string
@@ -71,6 +75,10 @@ func Load() Config {
 		QdrantCollection:      valueOrDefault("QDRANT_COLLECTION", "face-search-faces"),
 		SearchThreshold:       float32(boundedFloat64Value("SEARCH_NON_PRODUCTION_THRESHOLD", 0.5, -1, 1)),
 		SearchResultLimit:     int(boundedInt64Value("SEARCH_RESULT_LIMIT", 100, 1, 100)),
+		DownloadURLTTL:        boundedDurationValue("DOWNLOAD_URL_TTL", 2*time.Minute, 30*time.Second, time.Hour),
+		DownloadMaxBulk:       int(boundedInt64Value("DOWNLOAD_MAX_BULK", 50, 1, 200)),
+		DownloadRateLimit:     int(boundedInt64Value("DOWNLOAD_RATE_LIMIT", 30, 1, 1000)),
+		DownloadRateWindow:    boundedDurationValue("DOWNLOAD_RATE_WINDOW", time.Minute, time.Second, time.Hour),
 		DependencyTimeout:     durationValue("DEPENDENCY_TIMEOUT", 3*time.Second),
 		AuthSigningKey:        os.Getenv("AUTH_SIGNING_KEY"),
 		AuthIssuer:            valueOrDefault("AUTH_ISSUER", "face-search-api"),

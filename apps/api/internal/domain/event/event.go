@@ -52,6 +52,15 @@ type PublicSearchScope struct {
 	EventID        string
 }
 
+// PublicDownloadScope is trusted internal scope resolved from an eligible public
+// token for the download flow. It carries the Event download policy so the
+// download domain can enforce it server-side. It is never serialized to clients.
+type PublicDownloadScope struct {
+	OrganizationID   string
+	EventID          string
+	DownloadsEnabled bool
+}
+
 func (e Event) IsPubliclyEligible(now time.Time) bool {
 	return e.Visibility == VisibilityPublic && e.Status == StatusActive && e.PublicToken != "" && (e.ExpiresAt == nil || e.ExpiresAt.After(now))
 }
@@ -114,6 +123,10 @@ type Repository interface {
 
 type PublicSearchRepository interface {
 	FindPublicSearchScope(context.Context, string, time.Time) (PublicSearchScope, error)
+}
+
+type PublicDownloadRepository interface {
+	FindPublicDownloadScope(context.Context, string, time.Time) (PublicDownloadScope, error)
 }
 
 type Service struct {
@@ -220,6 +233,17 @@ func (s *Service) FindPublicSearchScope(ctx context.Context, token string, now t
 		return PublicSearchScope{}, ErrInvalid
 	}
 	return repository.FindPublicSearchScope(ctx, token, now)
+}
+
+func (s *Service) FindPublicDownloadScope(ctx context.Context, token string, now time.Time) (PublicDownloadScope, error) {
+	if token == "" || len(token) > 200 {
+		return PublicDownloadScope{}, ErrInvalid
+	}
+	repository, ok := s.repository.(PublicDownloadRepository)
+	if !ok {
+		return PublicDownloadScope{}, ErrInvalid
+	}
+	return repository.FindPublicDownloadScope(ctx, token, now)
 }
 
 func (s *Service) Status(ctx context.Context, organizationID, eventID string) (ProcessingStatus, error) {

@@ -22,7 +22,7 @@ type Status = "idle" | "searching";
  * object URL; both are released (and the file input reset) as soon as a search
  * attempt settles, so the image does not outlive the active flow.
  */
-export function SelfieSearch({ publicToken }: { publicToken: string }) {
+export function SelfieSearch({ publicToken, downloadsEnabled }: { publicToken: string; downloadsEnabled: boolean }) {
   const [consent, setConsent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -172,7 +172,7 @@ export function SelfieSearch({ publicToken }: { publicToken: string }) {
             Không tìm thấy ảnh phù hợp với khuôn mặt của bạn.
           </p>
         ) : (
-          <ResultGallery results={results} nextCursor={nextCursor} page={page} onPageChange={setPage} />
+          <ResultGallery publicToken={publicToken} downloadsEnabled={downloadsEnabled} results={results} nextCursor={nextCursor} page={page} onPageChange={setPage} />
         )
       )}
     </section>

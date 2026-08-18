@@ -7,6 +7,8 @@ const searchPublicEvent = vi.fn();
 
 vi.mock("@/lib/api", async () => ({
   searchPublicEvent: (...args: unknown[]) => searchPublicEvent(...args),
+  issuePublicDownloads: vi.fn(),
+  MAX_DOWNLOAD_BATCH: 50,
   PublicSearchRequestError: class PublicSearchRequestError extends Error {
     status: number;
     code: string | null;
@@ -15,6 +17,14 @@ vi.mock("@/lib/api", async () => ({
       this.name = "PublicSearchRequestError";
       this.status = status;
       this.code = code;
+    }
+  },
+  PublicDownloadRequestError: class PublicDownloadRequestError extends Error {
+    status: number;
+    constructor(status: number) {
+      super("Public download request rejected.");
+      this.name = "PublicDownloadRequestError";
+      this.status = status;
     }
   },
 }));
@@ -44,7 +54,7 @@ describe("SelfieSearch", () => {
   });
 
   it("requires consent before a search can run", async () => {
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     const button = screen.getByRole("button", { name: "Tìm ảnh" });
     expect(button).toBeDisabled();
@@ -54,7 +64,7 @@ describe("SelfieSearch", () => {
   });
 
   it("shows a preview for a valid selfie and rejects unsupported types", () => {
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     expect(screen.getByAltText("Xem trước ảnh selfie")).toBeInTheDocument();
     selectFile(makeFile("application/pdf", "notes.pdf"));
@@ -64,7 +74,7 @@ describe("SelfieSearch", () => {
 
   it("renders the match count and result tiles on success", async () => {
     searchPublicEvent.mockResolvedValue({ results: [{ photoId: "aaaaaaaa-1111" }, { photoId: "bbbbbbbb-2222" }], nextCursor: null });
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     checkConsent();
     fireEvent.click(screen.getByRole("button", { name: "Tìm ảnh" }));
@@ -75,7 +85,7 @@ describe("SelfieSearch", () => {
 
   it("shows a no-results state when nothing matches", async () => {
     searchPublicEvent.mockResolvedValue({ results: [], nextCursor: null });
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     checkConsent();
     fireEvent.click(screen.getByRole("button", { name: "Tìm ảnh" }));
@@ -83,7 +93,7 @@ describe("SelfieSearch", () => {
   });
 
   it("surfaces the typed single-face errors", async () => {
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
 
     searchPublicEvent.mockRejectedValueOnce(new api.PublicSearchRequestError(422, "face_count_zero"));
     selectFile(makeFile());
@@ -99,7 +109,7 @@ describe("SelfieSearch", () => {
 
   it("maps status-only failures to a safe message without leaking internals", async () => {
     searchPublicEvent.mockRejectedValue(new api.PublicSearchRequestError(503, null));
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     checkConsent();
     fireEvent.click(screen.getByRole("button", { name: "Tìm ảnh" }));
@@ -109,7 +119,7 @@ describe("SelfieSearch", () => {
   it("does not persist the selfie: revokes the object URL, clears the input, and never touches web storage", async () => {
     const setLocal = vi.spyOn(Storage.prototype, "setItem");
     searchPublicEvent.mockResolvedValue({ results: [{ photoId: "aaaaaaaa-1111" }], nextCursor: null });
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     const input = screen.getByLabelText("Ảnh selfie") as HTMLInputElement;
     selectFile(makeFile());
     checkConsent();
@@ -125,7 +135,7 @@ describe("SelfieSearch", () => {
   it("paginates large result sets client-side", async () => {
     const results = Array.from({ length: 15 }, (_, index) => ({ photoId: `photo-${index}` }));
     searchPublicEvent.mockResolvedValue({ results, nextCursor: null });
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     checkConsent();
     fireEvent.click(screen.getByRole("button", { name: "Tìm ảnh" }));
@@ -139,7 +149,7 @@ describe("SelfieSearch", () => {
   it("shows a searching state while the request is in flight", async () => {
     let resolveSearch: (value: api.PublicSearchResponse) => void = () => {};
     searchPublicEvent.mockImplementation(() => new Promise((resolve) => { resolveSearch = resolve; }));
-    render(<SelfieSearch publicToken="token-1" />);
+    render(<SelfieSearch publicToken="token-1" downloadsEnabled={false} />);
     selectFile(makeFile());
     checkConsent();
     fireEvent.click(screen.getByRole("button", { name: "Tìm ảnh" }));

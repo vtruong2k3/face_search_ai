@@ -10,9 +10,12 @@ import (
 	"github.com/face-search-ai/api/internal/config"
 	"github.com/face-search-ai/api/internal/domain/auth"
 	"github.com/face-search-ai/api/internal/domain/authorization"
+	"github.com/face-search-ai/api/internal/domain/download"
 	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/domain/photo"
 	"github.com/face-search-ai/api/internal/domain/search"
+	"github.com/face-search-ai/api/internal/downloadinfra"
+	"github.com/face-search-ai/api/internal/ratelimit"
 	"github.com/face-search-ai/api/internal/searchinfra"
 	"github.com/face-search-ai/api/internal/storage/objectstorage"
 	"github.com/face-search-ai/api/internal/store"
@@ -35,6 +38,8 @@ type Dependencies struct {
 	photoUploads    *photo.UploadService
 	outboxPublisher *outboxPublisher
 	search          *search.Service
+	downloads       *download.Service
+	downloadLimiter *ratelimit.Limiter
 }
 
 type Status struct {
@@ -86,6 +91,19 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		pool.Close()
 		return nil, fmt.Errorf("search config: %w", err)
 	}
+	downloadRepository := postgres.NewDownloadRepository(pool)
+	downloadService, err := download.NewService(
+		downloadinfra.NewScopeResolver(eventService),
+		downloadRepository,
+		objectstorage.NewMinIO(minioClient, cfg.MinIOBucket),
+		downloadRepository,
+		cfg.DownloadURLTTL,
+		cfg.DownloadMaxBulk,
+	)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("download config: %w", err)
+	}
 	outboxRepo := postgres.NewOutboxRepository(pool)
 	outboxCfg := OutboxPublisherConfig{
 		StreamName:   cfg.OutboxStreamName,
@@ -109,6 +127,8 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		photoUploads:    photo.NewUploadService(photoRepository, postgres.NewPhotoUploadRepository(pool), objectstorage.NewMinIO(minioClient, cfg.MinIOBucket), uploadPolicy),
 		outboxPublisher: newOutboxPublisher(outboxRepo, redisClient, outboxCfg),
 		search:          searchService,
+		downloads:       downloadService,
+		downloadLimiter: ratelimit.New(cfg.DownloadRateLimit, cfg.DownloadRateWindow),
 	}, nil
 }
 
@@ -118,6 +138,8 @@ func (d *Dependencies) EventService() *event.Service                 { return d.
 func (d *Dependencies) PhotoService() *photo.Service                 { return d.photos }
 func (d *Dependencies) PhotoUploadService() *photo.UploadService     { return d.photoUploads }
 func (d *Dependencies) SearchService() *search.Service               { return d.search }
+func (d *Dependencies) DownloadService() *download.Service           { return d.downloads }
+func (d *Dependencies) DownloadLimiter() *ratelimit.Limiter          { return d.downloadLimiter }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 // RunOutboxPublisher starts the outbox polling loop. Call from main in a goroutine;

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/face-search-ai/api/internal/domain/download"
 	"github.com/face-search-ai/api/internal/domain/photo"
 	"github.com/minio/minio-go/v7"
 )
@@ -62,4 +63,23 @@ func (m *MinIO) Stat(ctx context.Context, objectKey string) (photo.StoredObject,
 	return photo.StoredObject{ByteSize: result.Size, ContentType: result.ContentType, ChecksumSHA256: checksum}, nil
 }
 
-var _ photo.MultipartStorage = (*MinIO)(nil)
+// PresignGet signs a short-lived GET for exactly one stored object. The signed
+// URL is bound to the bucket and object key and expires after ttl; it grants no
+// access to any other object and cannot be extended. The content disposition is
+// signed into the URL so the browser downloads the file as an attachment.
+func (m *MinIO) PresignGet(ctx context.Context, objectKey, contentDisposition string, ttl time.Duration) (string, time.Time, error) {
+	parameters := url.Values{}
+	if contentDisposition != "" {
+		parameters.Set("response-content-disposition", contentDisposition)
+	}
+	signed, err := m.client.PresignedGetObject(ctx, m.bucket, objectKey, ttl, parameters)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return signed.String(), time.Now().UTC().Add(ttl), nil
+}
+
+var (
+	_ photo.MultipartStorage   = (*MinIO)(nil)
+	_ download.ObjectURLSigner = (*MinIO)(nil)
+)

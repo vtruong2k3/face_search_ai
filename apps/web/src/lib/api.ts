@@ -18,6 +18,8 @@ export type PublicSearchResponse = components["schemas"]["PublicSearchResponse"]
 export type PublicSearchResult = components["schemas"]["PublicSearchResult"];
 export type SearchError = components["schemas"]["SearchError"];
 export type SearchErrorCode = SearchError["code"];
+export type PublicDownloadResponse = components["schemas"]["PublicDownloadResponse"];
+export type PublicDownload = components["schemas"]["PublicDownload"];
 export type Photo = components["schemas"]["Photo"];
 export type CreatePhoto = components["schemas"]["CreatePhoto"];
 export type MultipartUpload = components["schemas"]["MultipartUpload"];
@@ -95,6 +97,39 @@ export async function searchPublicEvent(publicToken: string, selfie: File, conse
     throw new PublicSearchRequestError(response.status, code);
   }
   return response.json() as Promise<PublicSearchResponse>;
+}
+
+/** The maximum number of photos a single controlled-download request may carry, matching the contract bound. */
+export const MAX_DOWNLOAD_BATCH = 50;
+
+/** Raised when a controlled-download request is rejected, carrying the HTTP status so the UI can map a safe, localized message. */
+export class PublicDownloadRequestError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super("Public download request rejected.");
+    this.name = "PublicDownloadRequestError";
+    this.status = status;
+  }
+}
+
+/**
+ * Requests short-lived, object-scoped download links for in-scope Event photos.
+ *
+ * Authorization is enforced entirely server-side from the public Event token and
+ * download policy; the browser only forwards opaque photo identifiers returned by
+ * a prior search. The returned URLs expire and must be used promptly.
+ */
+export async function issuePublicDownloads(publicToken: string, photoIds: string[]): Promise<PublicDownloadResponse> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/public/events/${encodeURIComponent(publicToken)}/downloads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ photoIds }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new PublicDownloadRequestError(response.status);
+  }
+  return response.json() as Promise<PublicDownloadResponse>;
 }
 
 async function photoRequest<T>(path: string, init?: RequestInit): Promise<T> {

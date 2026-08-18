@@ -376,6 +376,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/events/{publicToken}/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicToken: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue short-lived download links for scoped Event photos
+         * @description Customer download authorization derives only from the opaque public Event token, the Event download policy, and result scope. The server re-resolves the Event scope on every request, requires downloads to be enabled, and confirms each requested photo belongs to the resolved Event and is in a downloadable (READY) state before signing access. Each returned link is a short-lived, object-scoped signed URL that expires and cannot be replayed for any other object, Event, or tenant. No grant token is persisted or returned. Unknown, private, archived, and expired Events and Events with downloads disabled are intentionally indistinguishable. Requests are rate limited and audited without recording signed URLs, object paths, or tokens.
+         */
+        post: operations["issuePublicDownloads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -474,6 +496,22 @@ export interface components {
         PublicSearchResult: {
             /** Format: uuid */
             photoId: string;
+        };
+        /** @description Bounded set of Event-scoped photo identifiers to download. Identifiers come from a prior selfie search for the same public Event. The request is rejected uniformly when any identifier is not part of the resolved Event or is not in a downloadable state. */
+        PublicDownloadRequest: {
+            photoIds: string[];
+        };
+        PublicDownloadResponse: {
+            downloads: components["schemas"]["PublicDownload"][];
+        };
+        /** @description A single short-lived, object-scoped download link. The URL is signed for exactly one stored original and expires at expiresAt; it grants no other access and is never logged or audited. */
+        PublicDownload: {
+            /** Format: uuid */
+            photoId: string;
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         SearchError: {
             /** @enum {string} */
@@ -1251,6 +1289,36 @@ export interface operations {
             404: components["responses"]["NotFound"];
             413: components["responses"]["PayloadTooLarge"];
             422: components["responses"]["SearchPolicyRejected"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    issuePublicDownloads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicToken: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicDownloadRequest"];
+            };
+        };
+        responses: {
+            /** @description Short-lived download links for the requested in-scope photos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDownloadResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
