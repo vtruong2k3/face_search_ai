@@ -76,13 +76,31 @@ services:
     build: ./workers/photo-worker
     environment:
       REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-face-search-faces}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-face-search}
       FACE_AI_URL: http://face-ai:8001
+      FACE_AI_INTERNAL_TOKEN: ${FACE_AI_INTERNAL_TOKEN:-}
       REDIS_STREAM: ${REDIS_STREAM:-photo-jobs}
       REDIS_GROUP: ${REDIS_GROUP:-photo-workers}
       DEAD_LETTER_STREAM: ${DEAD_LETTER_STREAM:-photo-jobs-dlq}
     depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       face-ai:
         condition: service_healthy
     networks: [app]

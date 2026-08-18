@@ -1,18 +1,23 @@
 import asyncio
-import time
 from collections.abc import Callable, Coroutine
 from typing import Any
 
 import redis.asyncio as redis
 import structlog
 from minio import Minio
+from psycopg_pool import ConnectionPool
+from qdrant_client import QdrantClient
 from redis.exceptions import ResponseError
 
-from photo_worker.errors import PhotoWorkerError
+from photo_worker.errors import TerminalProcessingError
+from photo_worker.face_ai import FaceAIClient
 from photo_worker.image import ImageProcessor
+from photo_worker.index import FaceVectorIndex
 from photo_worker.jobs import JobEnvelope, PhotoProcessingPayload
+from photo_worker.persist import PostgresPhotoPersistence
+from photo_worker.processor import PhotoProcessor
 from photo_worker.settings import Settings
-from photo_worker.storage import MinioStorageAdapter, build_object_key
+from photo_worker.storage import MinioStorageAdapter
 
 log = structlog.get_logger()
 
@@ -47,6 +52,37 @@ class WorkerConsumer:
             preview_max_size=settings.preview_max_size,
             preview_quality=settings.preview_quality,
         )
+        self.photo_processor: PhotoProcessor | None = None
+        self._db_pool: ConnectionPool | None = None
+        self._qdrant: QdrantClient | None = None
+        self._face_ai: FaceAIClient | None = None
+        if processor is None:
+            self._db_pool = ConnectionPool(
+                conninfo=settings.database_url,
+                min_size=settings.database_min_pool,
+                max_size=settings.database_max_pool,
+                open=False,
+            )
+            self._db_pool.open(wait=False)
+            self._qdrant = QdrantClient(url=settings.qdrant_url)
+            self._face_ai = FaceAIClient(
+                base_url=settings.face_ai_url,
+                internal_token=settings.face_ai_internal_token,
+                timeout_s=settings.face_ai_timeout_s,
+                embedding_dimension=settings.embedding_dimension,
+            )
+            self.photo_processor = PhotoProcessor(
+                settings=settings,
+                storage=self.storage,
+                image_processor=self.image_processor,
+                face_ai=self._face_ai,
+                index=FaceVectorIndex(
+                    client=self._qdrant,  # type: ignore[arg-type]
+                    collection_name=settings.qdrant_collection,
+                    dimension=settings.embedding_dimension,
+                ),
+                persist=PostgresPhotoPersistence(self._db_pool),
+            )
 
     async def setup_group(self) -> None:
         try:
@@ -86,6 +122,12 @@ class WorkerConsumer:
             await asyncio.gather(autoclaim_task, read_task, return_exceptions=True)
             if self._active_tasks:
                 await asyncio.gather(*self._active_tasks, return_exceptions=True)
+            if self._face_ai is not None:
+                await self._face_ai.aclose()
+            if self._db_pool is not None:
+                self._db_pool.close()
+            if self._qdrant is not None:
+                self._qdrant.close()
             log.info("worker_consumer_stopped")
 
     def stop(self) -> None:
@@ -198,6 +240,19 @@ class WorkerConsumer:
                 await self.client.xack(self.settings.redis_stream, self.settings.redis_group, message_id)
                 log.info("job_processed_successfully", message_id=message_id, correlation_id=correlation_id, type=job.type)
                 return
+            except TerminalProcessingError as err:
+                log.warning(
+                    "terminal_photo_processing_failure",
+                    message_id=message_id,
+                    correlation_id=correlation_id,
+                    error=str(err),
+                )
+                try:
+                    await self._fail_terminal_photo(job, err)
+                    await self.client.xack(self.settings.redis_stream, self.settings.redis_group, message_id)
+                except Exception:
+                    await self._dead_letter(message_id, fields, str(err))
+                return
             except Exception as err:
                 log.warning(
                     "job_processing_attempt_failed",
@@ -237,52 +292,26 @@ class WorkerConsumer:
         if job.type == "connectivity.smoke":
             return
         if job.type == "photo.processing.requested" and isinstance(job.payload, PhotoProcessingPayload):
-            start_ms = time.perf_counter_ns() / 1_000_000
-
-            # 1. Fetch original bytes
-            original_bytes = await self.storage.get_object(
-                bucket=self.settings.minio_bucket,
-                object_key=job.payload.object_key,
-            )
-
-            # 2. Process image and generate derivatives
-            # This is CPU bound, run in a separate thread so it doesn't block the async event loop
-            try:
-                derivatives = await asyncio.to_thread(self.image_processor.generate_derivatives, original_bytes)
-            except PhotoWorkerError as error:
-                log.warning(
-                    "image_processing_failed",
-                    photo_id=job.payload.photo_id,
-                    error=str(error),
-                    error_type=type(error).__name__,
-                )
-                raise  # Re-raise to trigger dead-letter logic for unrecoverable structural errors
-
-            # 3. Upload derivatives
-            variants_created = []
-            for variant, result in derivatives.items():
-                derivative_key = build_object_key(
-                    organization_id=job.payload.organization_id,
-                    event_id=job.payload.event_id,
-                    photo_id=job.payload.photo_id,
-                    variant=variant.value,
-                )
-                await self.storage.put_object(
-                    bucket=self.settings.minio_bucket,
-                    object_key=derivative_key,
-                    data=result.data,
-                    content_type=result.media_type,
-                )
-                variants_created.append(variant.value)
-
-            duration_ms = (time.perf_counter_ns() / 1_000_000) - start_ms
-
-            log.info(
-                "derivatives_generated",
-                photo_id=job.payload.photo_id,
-                variants=variants_created,
-                duration_ms=round(duration_ms, 2),
-            )
+            if self.photo_processor is None:
+                raise RuntimeError("photo processor is not configured")
+            await self.photo_processor.process(job.payload)
             return
 
         raise ValueError(f"unsupported job type: {job.type}")
+
+    async def _fail_terminal_photo(self, job: JobEnvelope, error: Exception) -> None:
+        if not isinstance(job.payload, PhotoProcessingPayload) or self.photo_processor is None:
+            return
+        try:
+            await asyncio.to_thread(
+                self.photo_processor.fail_photo,
+                job.payload,
+                type(error).__name__.lower(),
+            )
+        except Exception as failure_error:
+            log.error(
+                "failed_to_mark_photo_failed",
+                photo_id=job.payload.photo_id,
+                error=str(failure_error),
+            )
+            raise

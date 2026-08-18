@@ -28,3 +28,23 @@ class StorageError(PhotoWorkerError):
 
 class ObjectNotFoundError(StorageError):
     """Raised when requested object key does not exist in storage."""
+
+
+class TransientProcessingError(PhotoWorkerError):
+    """Retryable processing failure (network, Qdrant, database, Face AI 5xx)."""
+
+
+class TerminalProcessingError(PhotoWorkerError):
+    """Non-retryable structural failure; photo should be marked failed."""
+
+
+class FaceAIError(TransientProcessingError):
+    """Face AI HTTP or response-shape failure."""
+
+
+class FaceAIUnavailableError(FaceAIError):
+    """Face AI returned 5xx or was unreachable."""
+
+
+class FaceAIResponseError(TerminalProcessingError):
+    """Face AI returned an invalid extraction payload."""
