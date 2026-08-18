@@ -25,18 +25,26 @@ type Config struct {
 	PhotoUploadSignTTL    time.Duration
 	PhotoUploadSessionTTL time.Duration
 	FaceAIURL             string
-	DependencyTimeout     time.Duration
-	AuthSigningKey        string
-	AuthIssuer            string
-	AuthAudience          string
-	AccessTokenTTL        time.Duration
-	RefreshTokenTTL       time.Duration
-	RefreshCookieSecure   bool
-	WebOrigin             string
-	OutboxStreamName      string
-	OutboxPollInterval    time.Duration
-	OutboxBatchSize       int
-	OutboxLeaseTTL        time.Duration
+	FaceAIInternalToken   string
+	QdrantCollection      string
+	// SearchThreshold is an explicitly NON-PRODUCTION similarity cutoff used for
+	// implementation and testing before Checkpoint 1. It is not a validated
+	// production threshold; the production value is gated on the approved
+	// Checkpoint 1 benchmark. Sourced from SEARCH_NON_PRODUCTION_THRESHOLD.
+	SearchThreshold     float32
+	SearchResultLimit   int
+	DependencyTimeout   time.Duration
+	AuthSigningKey      string
+	AuthIssuer          string
+	AuthAudience        string
+	AccessTokenTTL      time.Duration
+	RefreshTokenTTL     time.Duration
+	RefreshCookieSecure bool
+	WebOrigin           string
+	OutboxStreamName    string
+	OutboxPollInterval  time.Duration
+	OutboxBatchSize     int
+	OutboxLeaseTTL      time.Duration
 }
 
 func Load() Config {
@@ -59,6 +67,10 @@ func Load() Config {
 		PhotoUploadSignTTL:    boundedDurationValue("PHOTO_UPLOAD_SIGN_TTL", 10*time.Minute, time.Minute, 24*time.Hour),
 		PhotoUploadSessionTTL: boundedDurationValue("PHOTO_UPLOAD_SESSION_TTL", 24*time.Hour, time.Minute, 7*24*time.Hour),
 		FaceAIURL:             valueOrDefault("FACE_AI_URL", "http://localhost:8001"),
+		FaceAIInternalToken:   os.Getenv("FACE_AI_INTERNAL_TOKEN"),
+		QdrantCollection:      valueOrDefault("QDRANT_COLLECTION", "face-search-faces"),
+		SearchThreshold:       float32(boundedFloat64Value("SEARCH_NON_PRODUCTION_THRESHOLD", 0.5, -1, 1)),
+		SearchResultLimit:     int(boundedInt64Value("SEARCH_RESULT_LIMIT", 100, 1, 100)),
 		DependencyTimeout:     durationValue("DEPENDENCY_TIMEOUT", 3*time.Second),
 		AuthSigningKey:        os.Getenv("AUTH_SIGNING_KEY"),
 		AuthIssuer:            valueOrDefault("AUTH_ISSUER", "face-search-api"),
@@ -102,6 +114,14 @@ func int32Value(key string, fallback int32) int32 {
 func int64Value(key string, fallback int64) int64 {
 	value, err := strconv.ParseInt(os.Getenv(key), 10, 64)
 	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func boundedFloat64Value(key string, fallback, minimum, maximum float64) float64 {
+	value, err := strconv.ParseFloat(os.Getenv(key), 64)
+	if err != nil || value < minimum || value > maximum {
 		return fallback
 	}
 	return value

@@ -147,6 +147,24 @@ func (r *EventRepository) FindPublic(ctx context.Context, token string, now time
 	return result, nil
 }
 
+func (r *EventRepository) FindPublicSearchScope(ctx context.Context, token string, now time.Time) (event.PublicSearchScope, error) {
+	var result event.PublicSearchScope
+	err := r.db.QueryRow(ctx, `
+		SELECT organization_id, id
+		FROM events
+		WHERE public_token = $1
+		  AND visibility = 'public'
+		  AND status = 'active'
+		  AND (expires_at IS NULL OR expires_at > $2)`, token, now,
+	).Scan(&result.OrganizationID, &result.EventID)
+	if err != nil {
+		return event.PublicSearchScope{}, MapError(err)
+	}
+	return result, nil
+}
+
+var _ event.PublicSearchRepository = (*EventRepository)(nil)
+
 func (r *EventRepository) Status(ctx context.Context, organizationID, eventID string) (event.ProcessingStatus, error) {
 	var status event.ProcessingStatus
 	status.EventID = eventID

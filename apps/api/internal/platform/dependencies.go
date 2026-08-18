@@ -12,6 +12,8 @@ import (
 	"github.com/face-search-ai/api/internal/domain/authorization"
 	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/domain/photo"
+	"github.com/face-search-ai/api/internal/domain/search"
+	"github.com/face-search-ai/api/internal/searchinfra"
 	"github.com/face-search-ai/api/internal/storage/objectstorage"
 	"github.com/face-search-ai/api/internal/store"
 	"github.com/face-search-ai/api/internal/store/postgres"
@@ -21,17 +23,18 @@ import (
 )
 
 type Dependencies struct {
-	postgres         *postgres.Store
-	redis            *redis.Client
-	minio            *minio.Client
-	cfg              config.Config
-	httpClient       *http.Client
-	auth             *auth.Service
-	authorization    *authorization.Service
-	events           *event.Service
-	photos           *photo.Service
-	photoUploads     *photo.UploadService
-	outboxPublisher  *outboxPublisher
+	postgres        *postgres.Store
+	redis           *redis.Client
+	minio           *minio.Client
+	cfg             config.Config
+	httpClient      *http.Client
+	auth            *auth.Service
+	authorization   *authorization.Service
+	events          *event.Service
+	photos          *photo.Service
+	photoUploads    *photo.UploadService
+	outboxPublisher *outboxPublisher
+	search          *search.Service
 }
 
 type Status struct {
@@ -66,6 +69,23 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 	}
 	photoRepository := postgres.NewPhotoRepository(pool)
 	redisClient := redis.NewClient(redisOptions)
+	apiHTTPClient := &http.Client{Timeout: cfg.DependencyTimeout}
+	faceAIClient, err := searchinfra.NewFaceAIClient(cfg.FaceAIURL, cfg.FaceAIInternalToken, apiHTTPClient)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("face ai config: %w", err)
+	}
+	qdrantClient, err := searchinfra.NewQdrantClient(cfg.QdrantURL, cfg.QdrantCollection, apiHTTPClient)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("qdrant config: %w", err)
+	}
+	eventService := event.NewService(postgres.NewEventRepository(pool))
+	searchService, err := search.NewService(searchinfra.NewScopeResolver(eventService), faceAIClient, qdrantClient, cfg.SearchThreshold, cfg.SearchResultLimit)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("search config: %w", err)
+	}
 	outboxRepo := postgres.NewOutboxRepository(pool)
 	outboxCfg := OutboxPublisherConfig{
 		StreamName:   cfg.OutboxStreamName,
@@ -78,7 +98,7 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		redis:      redisClient,
 		minio:      minioClient,
 		cfg:        cfg,
-		httpClient: &http.Client{Timeout: cfg.DependencyTimeout},
+		httpClient: apiHTTPClient,
 		auth:       authService,
 		authorization: authorization.NewServiceWithAuditor(
 			postgres.NewAuthorizationRepository(pool),
@@ -88,6 +108,7 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		photos:          photo.NewService(photoRepository),
 		photoUploads:    photo.NewUploadService(photoRepository, postgres.NewPhotoUploadRepository(pool), objectstorage.NewMinIO(minioClient, cfg.MinIOBucket), uploadPolicy),
 		outboxPublisher: newOutboxPublisher(outboxRepo, redisClient, outboxCfg),
+		search:          searchService,
 	}, nil
 }
 
@@ -96,6 +117,7 @@ func (d *Dependencies) AuthorizationService() *authorization.Service { return d.
 func (d *Dependencies) EventService() *event.Service                 { return d.events }
 func (d *Dependencies) PhotoService() *photo.Service                 { return d.photos }
 func (d *Dependencies) PhotoUploadService() *photo.UploadService     { return d.photoUploads }
+func (d *Dependencies) SearchService() *search.Service               { return d.search }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 // RunOutboxPublisher starts the outbox polling loop. Call from main in a goroutine;

@@ -11,10 +11,10 @@ import (
 )
 
 func NewRouter(checker handlers.Checker) http.Handler {
-	return NewRouterWithAuth(checker, nil, nil, nil, nil, nil, "")
+	return NewRouterWithAuth(checker, nil, nil, nil, nil, nil, nil, "")
 }
 
-func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, authService *auth.Service, organizationsHandler *handlers.Organizations, eventsHandler *handlers.Events, photosHandler *handlers.Photos, webOrigin string) http.Handler {
+func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, authService *auth.Service, organizationsHandler *handlers.Organizations, eventsHandler *handlers.Events, photosHandler *handlers.Photos, searchHandler *handlers.Search, webOrigin string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", handlers.Live)
 	mux.HandleFunc("GET /health/ready", handlers.Ready(checker))
@@ -35,6 +35,9 @@ func NewRouterWithAuth(checker handlers.Checker, authHandler *handlers.Auth, aut
 	}
 	if eventsHandler != nil {
 		mux.HandleFunc("GET /api/v1/public/events/{publicToken}", eventsHandler.Public)
+	}
+	if searchHandler != nil {
+		mux.HandleFunc("POST /api/v1/public/events/{publicToken}", searchHandler.Public)
 	}
 	if authService != nil && eventsHandler != nil {
 		protected := func(handler http.HandlerFunc) http.Handler { return middleware.Authenticate(authService, handler) }

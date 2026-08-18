@@ -45,6 +45,13 @@ type PublicEvent struct {
 	DownloadsEnabled bool       `json:"downloadsEnabled"`
 }
 
+// PublicSearchScope is trusted internal scope resolved from an eligible public token.
+// It is never serialized or returned by the public Event endpoint.
+type PublicSearchScope struct {
+	OrganizationID string
+	EventID        string
+}
+
 func (e Event) IsPubliclyEligible(now time.Time) bool {
 	return e.Visibility == VisibilityPublic && e.Status == StatusActive && e.PublicToken != "" && (e.ExpiresAt == nil || e.ExpiresAt.After(now))
 }
@@ -103,6 +110,10 @@ type Repository interface {
 	Archive(context.Context, string, string) error
 	Status(context.Context, string, string) (ProcessingStatus, error)
 	FindPublic(context.Context, string, time.Time) (PublicEvent, error)
+}
+
+type PublicSearchRepository interface {
+	FindPublicSearchScope(context.Context, string, time.Time) (PublicSearchScope, error)
 }
 
 type Service struct {
@@ -198,6 +209,17 @@ func (s *Service) FindPublic(ctx context.Context, token string, now time.Time) (
 		return PublicEvent{}, ErrInvalid
 	}
 	return s.repository.FindPublic(ctx, token, now)
+}
+
+func (s *Service) FindPublicSearchScope(ctx context.Context, token string, now time.Time) (PublicSearchScope, error) {
+	if token == "" || len(token) > 200 {
+		return PublicSearchScope{}, ErrInvalid
+	}
+	repository, ok := s.repository.(PublicSearchRepository)
+	if !ok {
+		return PublicSearchScope{}, ErrInvalid
+	}
+	return repository.FindPublicSearchScope(ctx, token, now)
 }
 
 func (s *Service) Status(ctx context.Context, organizationID, eventID string) (ProcessingStatus, error) {

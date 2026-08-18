@@ -76,7 +76,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 ## Phase 6 — Customer selfie search
 
 - [x] Task 6.1: Define privacy-preserving search contract
-- [ ] Task 6.2: Implement ephemeral Event-scoped search
+- [x] Task 6.2: Implement ephemeral Event-scoped search (ephemeral single-face inference with zeroed selfie buffers and no biometric logging; trusted organization+Event Qdrant filters resolved server-side from the public token; explicitly labeled non-production test threshold via SEARCH_NON_PRODUCTION_THRESHOLD; photo-ID dedup ranked by best similarity with NaN/Inf rejection; adversarial cross-Event/cross-tenant filter-enforcement and scope-less-query-rejection tests; fmt/vet/test/build pass)
 - [ ] Task 6.3: Build selfie and gallery UI
 - [ ] Task 6.4: Implement controlled downloads
 - [ ] Checkpoint 6: Complete photographer and customer MVP flows
