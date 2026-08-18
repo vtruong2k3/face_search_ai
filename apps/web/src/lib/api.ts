@@ -14,6 +14,10 @@ export type CreateEvent = components["schemas"]["CreateEvent"];
 export type UpdateEvent = components["schemas"]["UpdateEvent"];
 export type EventProcessingStatus = components["schemas"]["EventProcessingStatus"];
 export type PublicEvent = components["schemas"]["PublicEvent"];
+export type PublicSearchResponse = components["schemas"]["PublicSearchResponse"];
+export type PublicSearchResult = components["schemas"]["PublicSearchResult"];
+export type SearchError = components["schemas"]["SearchError"];
+export type SearchErrorCode = SearchError["code"];
 export type Photo = components["schemas"]["Photo"];
 export type CreatePhoto = components["schemas"]["CreatePhoto"];
 export type MultipartUpload = components["schemas"]["MultipartUpload"];
@@ -60,6 +64,38 @@ export function getEventStatus(organizationId: string, eventId: string): Promise
 export function listPhotos(organizationId: string, eventId: string): Promise<Photo[]> { return photoRequest(photoPath(organizationId, eventId)); }
 export function reprocessPhoto(organizationId: string, eventId: string, photoId: string): Promise<Photo> { return photoRequest(`${photoPath(organizationId, eventId, photoId)}/reprocess`, { method: "POST" }); }
 export async function getPublicEvent(publicToken: string): Promise<PublicEvent> { const response = await fetch(`${apiBaseUrl}/api/v1/public/events/${encodeURIComponent(publicToken)}`, { cache: "no-store" }); if (!response.ok) throw new Error("Public Event is unavailable."); return response.json() as Promise<PublicEvent>; }
+
+/** Raised when a public selfie search is rejected, carrying the typed SearchError code (when present) so the UI can map a safe, localized message. */
+export class PublicSearchRequestError extends Error {
+  readonly status: number;
+  readonly code: SearchErrorCode | null;
+  constructor(status: number, code: SearchErrorCode | null) {
+    super("Public search request rejected.");
+    this.name = "PublicSearchRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** Posts an ephemeral selfie multipart search for an eligible public Event. The selfie bytes are only held for this request; the caller must not persist them. */
+export async function searchPublicEvent(publicToken: string, selfie: File, consentVersion: string): Promise<PublicSearchResponse> {
+  const form = new FormData();
+  form.append("selfie", selfie);
+  form.append("consent", "true");
+  form.append("consentVersion", consentVersion);
+  const response = await fetch(`${apiBaseUrl}/api/v1/public/events/${encodeURIComponent(publicToken)}`, { method: "POST", body: form, cache: "no-store" });
+  if (!response.ok) {
+    let code: SearchErrorCode | null = null;
+    try {
+      const body = (await response.json()) as Partial<SearchError>;
+      if (typeof body?.code === "string") code = body.code as SearchErrorCode;
+    } catch {
+      // Non-JSON or empty bodies are expected for some statuses; the HTTP status still drives the user-facing message.
+    }
+    throw new PublicSearchRequestError(response.status, code);
+  }
+  return response.json() as Promise<PublicSearchResponse>;
+}
 
 async function photoRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await authRequest(path, init);
