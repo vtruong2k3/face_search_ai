@@ -15,7 +15,8 @@ build:
 
 test:
 	cd apps/api && go test ./...
-	uv run --project services/face-ai pytest
+	cd services/face-ai && uv run --project . pytest
+	cd workers/photo-worker && uv run --project . pytest
 
 compose-config:
 	docker compose config
