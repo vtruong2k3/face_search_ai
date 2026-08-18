@@ -3,6 +3,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+PHOTO_PROCESSING = "photo.processing.requested"
+PHOTO_DELETION = "photo.deletion.requested"
+EVENT_DELETION = "event.deletion.requested"
+
 
 class PhotoProcessingPayload(BaseModel):
     photo_id: str = Field(alias="photoId")
@@ -14,9 +18,29 @@ class PhotoProcessingPayload(BaseModel):
     attempt_count: int = Field(default=0, alias="attemptCount")
 
 
+class PhotoDeletionPayload(BaseModel):
+    """Purge instruction for a single tombstoned photo. The API has already set
+    the photo to 'deleted'; this drives removal of its stored objects, vectors,
+    and face rows."""
+
+    photo_id: str = Field(alias="photoId")
+    organization_id: str = Field(alias="organizationId")
+    event_id: str = Field(alias="eventId")
+    object_key: str = Field(default="", alias="objectKey")
+
+
+class EventDeletionPayload(BaseModel):
+    """Purge instruction for an archived (deleted) event. Drives removal of every
+    photo's stored objects, vectors, and face rows for the event and tombstones
+    its photos."""
+
+    organization_id: str = Field(alias="organizationId")
+    event_id: str = Field(alias="eventId")
+
+
 class JobEnvelope(BaseModel):
     type: str
-    payload: PhotoProcessingPayload | dict[str, Any]
+    payload: PhotoProcessingPayload | PhotoDeletionPayload | EventDeletionPayload | dict[str, Any]
 
     @classmethod
     def from_stream(cls, fields: dict[Any, Any]) -> "JobEnvelope":
@@ -35,9 +59,9 @@ class JobEnvelope(BaseModel):
             else:
                 parsed = raw_payload
 
-            if norm["type"] == "photo.processing.requested" and isinstance(parsed, dict):
-                return cls(type=norm["type"], payload=PhotoProcessingPayload.model_validate(parsed))
-            return cls(type=norm["type"], payload=parsed if isinstance(parsed, dict) else {})
+            if isinstance(parsed, dict):
+                return cls(type=norm["type"], payload=_parse_payload(norm["type"], parsed))
+            return cls(type=norm["type"], payload={})
 
         # Case 2: Legacy or nested format {"job": "{...}"}
         if "job" in norm:
@@ -45,8 +69,20 @@ class JobEnvelope(BaseModel):
             parsed_job = json.loads(raw_job) if isinstance(raw_job, str) else raw_job
             job_type = parsed_job.get("type", "unknown")
             payload_data = parsed_job.get("payload", {})
-            if job_type == "photo.processing.requested" and isinstance(payload_data, dict):
-                return cls(type=job_type, payload=PhotoProcessingPayload.model_validate(payload_data))
+            if isinstance(payload_data, dict):
+                return cls(type=job_type, payload=_parse_payload(job_type, payload_data))
             return cls(type=job_type, payload=payload_data)
 
         raise ValueError(f"unrecognized stream message format: {norm}")
+
+
+def _parse_payload(job_type: str, data: dict[str, Any]) -> Any:
+    """Bind a raw payload dict to its typed model based on the job type. Unknown
+    types keep the raw dict so the consumer can reject them explicitly."""
+    if job_type == PHOTO_PROCESSING:
+        return PhotoProcessingPayload.model_validate(data)
+    if job_type == PHOTO_DELETION:
+        return PhotoDeletionPayload.model_validate(data)
+    if job_type == EVENT_DELETION:
+        return EventDeletionPayload.model_validate(data)
+    return data

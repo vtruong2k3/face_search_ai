@@ -80,20 +80,57 @@ func (r *PhotoRepository) Find(ctx context.Context, organizationID, eventID, pho
 			AND p.status <> 'deleted' AND e.status = 'active'`, organizationID, eventID, photoID)
 }
 
+// Delete tombstones a photo and durably schedules purge of its underlying data.
+// In a single transaction it (1) sets the photo to the terminal 'deleted' state
+// — which immediately makes it non-downloadable (downloads require 'ready') and
+// non-searchable (the search visibility filter requires 'ready'); (2) neutralizes
+// any not-yet-published processing outbox message for the photo so no new work is
+// enqueued; and (3) writes a versioned 'photo.deletion.requested' outbox message
+// that the worker consumes to purge MinIO objects, Qdrant vectors, and face rows.
+// It is idempotent: re-deleting an already-deleted photo re-affirms the tombstone,
+// the neutralize is a no-op, and ON CONFLICT DO NOTHING prevents duplicate purge
+// messages. It is fail-closed and tenant/Event-scoped; a missing or foreign
+// resource yields ErrNotFound.
 func (r *PhotoRepository) Delete(ctx context.Context, organizationID, eventID, photoID string) error {
-	tag, err := r.db.Exec(ctx, `
-		UPDATE photos p SET status = 'deleted', failure_code = NULL, updated_at = now()
-		FROM events e
-		WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3
-			AND e.organization_id = p.organization_id AND e.id = p.event_id AND e.status = 'active'`,
-		organizationID, eventID, photoID)
-	if err != nil {
-		return MapError(err)
-	}
-	if tag.RowsAffected() == 0 {
-		return store.ErrNotFound
-	}
-	return nil
+	return r.db.WithinTransaction(ctx, func(ctx context.Context, tx store.DBTX) error {
+		var objectKey string
+		err := tx.QueryRow(ctx, `
+			UPDATE photos p SET status = 'deleted', failure_code = NULL, updated_at = now()
+			FROM events e
+			WHERE p.organization_id = $1 AND p.event_id = $2 AND p.id = $3
+				AND e.organization_id = p.organization_id AND e.id = p.event_id AND e.status = 'active'
+			RETURNING p.object_key`,
+			organizationID, eventID, photoID).Scan(&objectKey)
+		if err != nil {
+			return MapError(err)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE outbox_messages
+			SET status = 'published', published_at = now(), updated_at = now()
+			WHERE organization_id = $1 AND aggregate_type = 'photo' AND aggregate_id = $2
+				AND event_type = 'photo.processing.requested' AND status IN ('pending', 'failed')`,
+			organizationID, photoID); err != nil {
+			return MapError(err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO outbox_messages (
+				organization_id, aggregate_type, aggregate_id, event_type,
+				payload, idempotency_key
+			) VALUES (
+				$1, 'photo', $2, 'photo.deletion.requested',
+				jsonb_build_object(
+					'photoId', $2::text,
+					'organizationId', $1::text,
+					'eventId', $3::text,
+					'objectKey', $4::text
+				),
+				$5
+			) ON CONFLICT (organization_id, idempotency_key) DO NOTHING`,
+			organizationID, photoID, eventID, objectKey, "photo.delete:"+photoID); err != nil {
+			return MapError(err)
+		}
+		return nil
+	})
 }
 
 // Reprocess atomically transitions a failed photo to queued, increments processing_generation,

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from minio import Minio
+from minio.deleteobjects import DeleteObject
 from minio.error import S3Error
 
 from photo_worker.errors import ObjectNotFoundError, StorageError
@@ -16,6 +17,23 @@ def safe_segment(value: str) -> bool:
     if "/" in value or "\\" in value:
         return False
     return True
+
+
+def build_photo_prefix(organization_id: str, event_id: str, photo_id: str) -> str:
+    """Object-key prefix that contains a single photo's original and all of its
+    derivatives. The trailing slash ensures a prefix match cannot spill into a
+    sibling photo whose id shares a leading substring."""
+    if not all(safe_segment(v) for v in (organization_id, event_id, photo_id)):
+        raise ValueError("invalid path segment in photo prefix construction")
+    return f"organizations/{organization_id}/events/{event_id}/photos/{photo_id}/"
+
+
+def build_event_prefix(organization_id: str, event_id: str) -> str:
+    """Object-key prefix that contains every photo (originals and derivatives)
+    for an event."""
+    if not all(safe_segment(v) for v in (organization_id, event_id)):
+        raise ValueError("invalid path segment in event prefix construction")
+    return f"organizations/{organization_id}/events/{event_id}/"
 
 
 def build_object_key(organization_id: str, event_id: str, photo_id: str, variant: str) -> str:
@@ -92,6 +110,34 @@ class MinioStorageAdapter:
             raise StorageError(f"failed to put object {object_key}: {error}") from error
         except Exception as error:
             raise StorageError(f"unexpected error putting {object_key}: {error}") from error
+
+    async def remove_prefix(self, bucket: str, prefix: str) -> int:
+        """Remove every object under ``prefix``. Refuses an empty or bucket-wide
+        prefix so a deletion job can never wipe an entire bucket. Idempotent:
+        removing an already-empty prefix returns 0 and raises nothing. Returns the
+        number of objects removed."""
+        if not prefix or not prefix.endswith("/") or "organizations/" not in prefix:
+            raise StorageError("refusing to remove objects for an unscoped prefix")
+
+        def _remove() -> int:
+            objects = self.client.list_objects(bucket, prefix=prefix, recursive=True)
+            names = [obj.object_name for obj in objects if obj.object_name]
+            if not names:
+                return 0
+            errors = list(self.client.remove_objects(bucket, [DeleteObject(name) for name in names]))
+            if errors:
+                # Do not surface object paths; report only the count.
+                raise StorageError(f"failed to remove {len(errors)} objects under prefix")
+            return len(names)
+
+        try:
+            return await asyncio.to_thread(_remove)
+        except StorageError:
+            raise
+        except S3Error as error:
+            raise StorageError(f"failed to remove objects under prefix: {error}") from error
+        except Exception as error:
+            raise StorageError(f"unexpected error removing objects under prefix: {error}") from error
 
     async def stat_object(self, bucket: str, object_key: str) -> ObjectMetadata:
         def _stat() -> Any:

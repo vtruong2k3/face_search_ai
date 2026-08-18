@@ -128,6 +128,35 @@ or `photo_worker_jobs_dead_lettered_total`; Redis stream pending entries growing
 4. Drain/inspect the dead-letter stream (`DEAD_LETTER_STREAM`) once the root cause is
    fixed. Reprocessing is idempotent.
 
+### Deletion did not fully purge
+
+Signal: a deleted Photo/Event still has objects in MinIO or vectors in Qdrant.
+
+1. Deletion is tombstone-first: the resource is already non-searchable and
+   non-downloadable the moment it is tombstoned (enforced by DB state, not by the
+   vector store). A lingering object/vector is a purge-lag or purge-failure issue,
+   not a privacy exposure.
+2. The purge runs as `photo.deletion.requested` / `event.deletion.requested`
+   outbox messages consumed by the worker. Check outbox rows
+   (`SELECT status, last_error_code FROM outbox_messages WHERE event_type LIKE '%deletion%'`)
+   and the worker DLQ. A stuck message points at a degraded MinIO/Qdrant/Postgres;
+   follow the dependency-down playbook, then let autoclaim reprocess. Purge steps
+   are idempotent, so reprocessing is safe.
+
+### Backups and restore
+
+- Take backups with `scripts/backup/backup.sh`; verify recoverability with
+  `scripts/backup/restore-drill.sh` on disposable infra. Procedures and the full
+  variable list are in `docs/backup-restore.md`.
+- Deleted data is recoverable only from a backup taken before the deletion.
+
+### Retention pruning
+
+- `scripts/retention-prune.sh` enforces the documented windows idempotently; run
+  it on a daily schedule. It prunes only time-bounded session/audit/operational
+  rows and never Photo/Event/faces/object data. Do not shorten
+  `AUDIT_RETENTION_DAYS` below your compliance obligation.
+
 ### Rate-limit spikes
 
 Signal: rising `rate_limit_rejections_total{surface}`.

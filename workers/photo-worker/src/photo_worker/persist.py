@@ -166,6 +166,52 @@ class PostgresPhotoPersistence:
         except Exception as error:
             raise PersistenceError("failed to delete extra faces") from error
 
+    def purge_photo_faces(self, *, organization_id: str, photo_id: str) -> None:
+        """Delete every face row for a single photo. Always scoped by both
+        organization and photo, so it can never touch another tenant. Idempotent:
+        deleting already-absent rows affects nothing."""
+        if not organization_id or not photo_id:
+            raise PersistenceError("organization_id and photo_id are required")
+        try:
+            with self._pool.connection() as connection:  # type: ignore[union-attr]
+                with connection.transaction():
+                    connection.execute(
+                        """
+                        DELETE FROM faces
+                        WHERE organization_id = %s AND photo_id = %s
+                        """,
+                        (organization_id, photo_id),
+                    )
+        except Exception as error:
+            raise PersistenceError("failed to purge photo faces") from error
+
+    def purge_event(self, *, organization_id: str, event_id: str) -> None:
+        """Purge an entire event's face rows and tombstone all of its photos.
+        Always scoped by both organization and event. Idempotent: re-running
+        deletes nothing further and re-affirms the photo tombstones."""
+        if not organization_id or not event_id:
+            raise PersistenceError("organization_id and event_id are required")
+        try:
+            with self._pool.connection() as connection:  # type: ignore[union-attr]
+                with connection.transaction():
+                    connection.execute(
+                        """
+                        DELETE FROM faces
+                        WHERE organization_id = %s AND event_id = %s
+                        """,
+                        (organization_id, event_id),
+                    )
+                    connection.execute(
+                        """
+                        UPDATE photos
+                        SET status = 'deleted', failure_code = NULL, updated_at = now()
+                        WHERE organization_id = %s AND event_id = %s AND status <> 'deleted'
+                        """,
+                        (organization_id, event_id),
+                    )
+        except Exception as error:
+            raise PersistenceError("failed to purge event") from error
+
     def mark_ready(self, *, organization_id: str, photo_id: str, processing_generation: int) -> None:
         try:
             with self._pool.connection() as connection:  # type: ignore[union-attr]

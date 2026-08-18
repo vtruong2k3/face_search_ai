@@ -119,16 +119,55 @@ func (r *EventRepository) Update(ctx context.Context, organizationID, eventID st
 	return current, nil
 }
 
+// Archive is the Event deletion lifecycle: it is terminal (there is no
+// un-archive) and durably schedules purge of the Event's underlying data. In a
+// single transaction it (1) tombstones the Event to 'archived' — which
+// immediately makes it non-public, so its photos are non-searchable (scope
+// resolution requires an active Event) and non-downloadable (downloads require an
+// active Event); (2) neutralizes any not-yet-published processing outbox messages
+// for the Event's photos; and (3) writes a versioned 'event.deletion.requested'
+// outbox message that the worker consumes to purge all of the Event's MinIO
+// objects, Qdrant vectors, and face rows and to tombstone its photos. It is
+// idempotent (ON CONFLICT DO NOTHING), fail-closed, and tenant-scoped; an unknown
+// or already-archived Event yields ErrNotFound.
 func (r *EventRepository) Archive(ctx context.Context, organizationID, eventID string) error {
-	tag, err := r.db.Exec(ctx, `UPDATE events SET status = 'archived', updated_at = now()
-		WHERE organization_id = $1 AND id = $2 AND status = 'active'`, organizationID, eventID)
-	if err != nil {
-		return MapError(err)
-	}
-	if tag.RowsAffected() == 0 {
-		return store.ErrNotFound
-	}
-	return nil
+	return r.db.WithinTransaction(ctx, func(ctx context.Context, tx store.DBTX) error {
+		tag, err := tx.Exec(ctx, `UPDATE events SET status = 'archived', updated_at = now()
+			WHERE organization_id = $1 AND id = $2 AND status = 'active'`, organizationID, eventID)
+		if err != nil {
+			return MapError(err)
+		}
+		if tag.RowsAffected() == 0 {
+			return store.ErrNotFound
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE outbox_messages
+			SET status = 'published', published_at = now(), updated_at = now()
+			WHERE organization_id = $1 AND aggregate_type = 'photo'
+				AND event_type = 'photo.processing.requested' AND status IN ('pending', 'failed')
+				AND aggregate_id IN (
+					SELECT id FROM photos WHERE organization_id = $1 AND event_id = $2
+				)`,
+			organizationID, eventID); err != nil {
+			return MapError(err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO outbox_messages (
+				organization_id, aggregate_type, aggregate_id, event_type,
+				payload, idempotency_key
+			) VALUES (
+				$1, 'event', $2, 'event.deletion.requested',
+				jsonb_build_object(
+					'organizationId', $1::text,
+					'eventId', $2::text
+				),
+				$3
+			) ON CONFLICT (organization_id, idempotency_key) DO NOTHING`,
+			organizationID, eventID, "event.delete:"+eventID); err != nil {
+			return MapError(err)
+		}
+		return nil
+	})
 }
 
 func (r *EventRepository) FindPublic(ctx context.Context, token string, now time.Time) (event.PublicEvent, error) {

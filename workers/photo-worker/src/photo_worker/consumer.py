@@ -11,11 +11,20 @@ from qdrant_client import QdrantClient
 from redis.exceptions import ResponseError
 
 from photo_worker import observability
+from photo_worker.deletion import DeletionProcessor
 from photo_worker.errors import TerminalProcessingError
 from photo_worker.face_ai import FaceAIClient
 from photo_worker.image import ImageProcessor
 from photo_worker.index import FaceVectorIndex
-from photo_worker.jobs import JobEnvelope, PhotoProcessingPayload
+from photo_worker.jobs import (
+    EVENT_DELETION,
+    PHOTO_DELETION,
+    PHOTO_PROCESSING,
+    EventDeletionPayload,
+    JobEnvelope,
+    PhotoDeletionPayload,
+    PhotoProcessingPayload,
+)
 from photo_worker.persist import PostgresPhotoPersistence
 from photo_worker.processor import PhotoProcessor
 from photo_worker.settings import Settings
@@ -56,6 +65,7 @@ class WorkerConsumer:
             preview_quality=settings.preview_quality,
         )
         self.photo_processor: PhotoProcessor | None = None
+        self.deletion_processor: DeletionProcessor | None = None
         self._db_pool: ConnectionPool | None = None
         self._qdrant: QdrantClient | None = None
         self._face_ai: FaceAIClient | None = None
@@ -74,17 +84,25 @@ class WorkerConsumer:
                 timeout_s=settings.face_ai_timeout_s,
                 embedding_dimension=settings.embedding_dimension,
             )
+            index = FaceVectorIndex(
+                client=self._qdrant,  # type: ignore[arg-type]
+                collection_name=settings.qdrant_collection,
+                dimension=settings.embedding_dimension,
+            )
+            persist = PostgresPhotoPersistence(self._db_pool)
             self.photo_processor = PhotoProcessor(
                 settings=settings,
                 storage=self.storage,
                 image_processor=self.image_processor,
                 face_ai=self._face_ai,
-                index=FaceVectorIndex(
-                    client=self._qdrant,  # type: ignore[arg-type]
-                    collection_name=settings.qdrant_collection,
-                    dimension=settings.embedding_dimension,
-                ),
-                persist=PostgresPhotoPersistence(self._db_pool),
+                index=index,
+                persist=persist,
+            )
+            self.deletion_processor = DeletionProcessor(
+                settings=settings,
+                storage=self.storage,
+                index=index,
+                persist=persist,
             )
 
     async def setup_group(self) -> None:
@@ -309,10 +327,20 @@ class WorkerConsumer:
     async def default_process(self, job: JobEnvelope) -> None:
         if job.type == "connectivity.smoke":
             return
-        if job.type == "photo.processing.requested" and isinstance(job.payload, PhotoProcessingPayload):
+        if job.type == PHOTO_PROCESSING and isinstance(job.payload, PhotoProcessingPayload):
             if self.photo_processor is None:
                 raise RuntimeError("photo processor is not configured")
             await self.photo_processor.process(job.payload)
+            return
+        if job.type == PHOTO_DELETION and isinstance(job.payload, PhotoDeletionPayload):
+            if self.deletion_processor is None:
+                raise RuntimeError("deletion processor is not configured")
+            await self.deletion_processor.delete_photo(job.payload)
+            return
+        if job.type == EVENT_DELETION and isinstance(job.payload, EventDeletionPayload):
+            if self.deletion_processor is None:
+                raise RuntimeError("deletion processor is not configured")
+            await self.deletion_processor.delete_event(job.payload)
             return
 
         raise ValueError(f"unsupported job type: {job.type}")

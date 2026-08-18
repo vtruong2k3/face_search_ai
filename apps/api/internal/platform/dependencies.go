@@ -91,7 +91,7 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		return nil, fmt.Errorf("qdrant config: %w", err)
 	}
 	eventService := event.NewService(postgres.NewEventRepository(pool))
-	searchService, err := search.NewService(searchinfra.NewScopeResolver(eventService), faceAIClient, qdrantClient, cfg.SearchThreshold, cfg.SearchResultLimit)
+	searchService, err := search.NewService(searchinfra.NewScopeResolver(eventService), faceAIClient, qdrantClient, postgres.NewSearchRepository(pool), cfg.SearchThreshold, cfg.SearchResultLimit)
 	if err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("search config: %w", err)

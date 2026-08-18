@@ -13,6 +13,10 @@ dist/
 bin/
 .DS_Store
 
+# Backup artifacts contain tenant metadata, stored objects, and face vectors.
+backups/
+**/backups/
+
 # Sensitive AI datasets and derived biometric artifacts
 data/
 datasets/

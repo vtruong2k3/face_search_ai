@@ -42,19 +42,31 @@ type ScopeResolver interface {
 	FindPublicSearchScope(context.Context, string, time.Time) (event.PublicSearchScope, error)
 }
 
+// VisibilityFilter returns, from the supplied candidate photo IDs, only those
+// that are still publicly visible for the given tenant and Event — that is,
+// present, in the READY state, and belonging to an active Event. It is the
+// authoritative enforcement that a tombstoned (deleted) Photo or an archived
+// Event is immediately non-searchable, independent of vector-index cleanup lag.
+// The query is always tenant- and Event-scoped and fails closed: any error
+// surfaces as ErrUnavailable rather than returning unfiltered results.
+type VisibilityFilter interface {
+	FilterVisiblePhotoIDs(ctx context.Context, organizationID, eventID string, photoIDs []string) ([]string, error)
+}
+
 type Service struct {
 	scopes     ScopeResolver
 	inference  Inference
 	vectors    VectorIndex
+	visibility VisibilityFilter
 	threshold  float32
 	maxResults int
 }
 
-func NewService(scopes ScopeResolver, inference Inference, vectors VectorIndex, threshold float32, maxResults int) (*Service, error) {
-	if scopes == nil || inference == nil || vectors == nil || threshold < -1 || threshold > 1 || maxResults <= 0 || maxResults > MaxResults {
+func NewService(scopes ScopeResolver, inference Inference, vectors VectorIndex, visibility VisibilityFilter, threshold float32, maxResults int) (*Service, error) {
+	if scopes == nil || inference == nil || vectors == nil || visibility == nil || threshold < -1 || threshold > 1 || maxResults <= 0 || maxResults > MaxResults {
 		return nil, ErrInvalidRequest
 	}
-	return &Service{scopes: scopes, inference: inference, vectors: vectors, threshold: threshold, maxResults: maxResults}, nil
+	return &Service{scopes: scopes, inference: inference, vectors: vectors, visibility: visibility, threshold: threshold, maxResults: maxResults}, nil
 }
 
 func (s *Service) Search(ctx context.Context, token, contentType string, selfie []byte, consent, consentVersion string) ([]Result, error) {
@@ -80,7 +92,37 @@ func (s *Service) Search(ctx context.Context, token, contentType string, selfie 
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	return RankPublicMatches(matches, s.threshold, s.maxResults), nil
+	ranked := RankPublicMatches(matches, s.threshold, s.maxResults)
+	return s.filterVisible(ctx, scope.OrganizationID, scope.EventID, ranked)
+}
+
+// filterVisible drops any ranked result whose Photo is no longer publicly
+// visible (tombstoned/deleted, or belonging to an archived Event). This makes
+// deletion immediately effective for search even before the asynchronous vector
+// purge runs. It preserves the ranked ordering and fails closed on error.
+func (s *Service) filterVisible(ctx context.Context, organizationID, eventID string, ranked []Result) ([]Result, error) {
+	if len(ranked) == 0 {
+		return ranked, nil
+	}
+	ids := make([]string, len(ranked))
+	for i, result := range ranked {
+		ids[i] = result.PhotoID
+	}
+	visible, err := s.visibility.FilterVisiblePhotoIDs(ctx, organizationID, eventID, ids)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	allowed := make(map[string]struct{}, len(visible))
+	for _, id := range visible {
+		allowed[id] = struct{}{}
+	}
+	filtered := make([]Result, 0, len(ranked))
+	for _, result := range ranked {
+		if _, ok := allowed[result.PhotoID]; ok {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered, nil
 }
 
 func RankPublicMatches(matches []VectorMatch, threshold float32, maxResults int) []Result {

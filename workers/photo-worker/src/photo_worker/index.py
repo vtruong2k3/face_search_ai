@@ -129,6 +129,54 @@ class FaceVectorIndex:
         except Exception as error:
             raise FaceIndexError("failed to delete extra face vectors") from error
 
+    def delete_photo_vectors(self, *, organization_id: str, photo_id: str) -> None:
+        """Delete every face vector for a single photo. Always scoped by both
+        organization and photo so it can never remove another tenant's vectors.
+        Idempotent: deleting already-absent points is a no-op in Qdrant."""
+        if not organization_id or not photo_id:
+            raise FaceIndexError("organization_id and photo_id are required")
+        self._delete_by_filter(
+            [
+                models.FieldCondition(
+                    key="organization_id",
+                    match=models.MatchValue(value=organization_id),
+                ),
+                models.FieldCondition(
+                    key="photo_id",
+                    match=models.MatchValue(value=photo_id),
+                ),
+            ]
+        )
+
+    def delete_event_vectors(self, *, organization_id: str, event_id: str) -> None:
+        """Delete every face vector for an entire event. Always scoped by both
+        organization and event. Idempotent."""
+        if not organization_id or not event_id:
+            raise FaceIndexError("organization_id and event_id are required")
+        self._delete_by_filter(
+            [
+                models.FieldCondition(
+                    key="organization_id",
+                    match=models.MatchValue(value=organization_id),
+                ),
+                models.FieldCondition(
+                    key="event_id",
+                    match=models.MatchValue(value=event_id),
+                ),
+            ]
+        )
+
+    def _delete_by_filter(self, conditions: list[Any]) -> None:
+        self.ensure_collection()
+        try:
+            self._client.delete(
+                collection_name=self._collection_name,
+                points_selector=models.FilterSelector(filter=models.Filter(must=conditions)),
+                wait=True,
+            )
+        except Exception as error:
+            raise FaceIndexError("failed to delete face vectors") from error
+
     def _point(self, face: IndexedFace) -> models.PointStruct:
         if len(face.embedding) != self._dimension:
             raise FaceIndexError(f"embedding dimension must be {self._dimension}")
