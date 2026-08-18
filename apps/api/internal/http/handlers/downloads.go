@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/face-search-ai/api/internal/domain/authorization"
@@ -44,15 +42,15 @@ type publicDownloadResponse struct {
 func (h *Downloads) Public(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("publicToken")
 
-	if h.limiter != nil && !h.limiter.Allow(token+"|"+clientIP(r)) {
+	if h.limiter != nil && !h.limiter.Allow(token+"|"+middleware.ClientIP(r)) {
 		h.audit(r, "", "", "download.rate_limited", authorization.AuditDenied, map[string]string{"reason": "rate_limited"})
 		writeAuthError(w, http.StatusTooManyRequests, "rate_limited", "Too many download requests. Please try again shortly.")
 		return
 	}
 
 	var request publicDownloadRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 
@@ -112,22 +110,4 @@ func (h *Downloads) audit(r *http.Request, organizationID, eventID, action strin
 		RequestID:      middleware.RequestIDFromContext(r.Context()),
 		Metadata:       metadata,
 	})
-}
-
-// clientIP returns a best-effort client address for rate-limit keying. It trusts
-// the leftmost X-Forwarded-For entry set by the reverse proxy and falls back to
-// the transport remote address. It is used only for coarse abuse control.
-func clientIP(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		if first, _, found := strings.Cut(forwarded, ","); found || first != "" {
-			if ip := strings.TrimSpace(first); ip != "" {
-				return ip
-			}
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

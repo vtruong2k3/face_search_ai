@@ -33,11 +33,11 @@ type authResponse struct {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Invalid request.")
+		writeDecodeError(w, err)
 		return false
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {

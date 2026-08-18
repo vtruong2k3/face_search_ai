@@ -43,9 +43,22 @@ func main() {
 			photosHandler,
 			searchHandler,
 			downloadsHandler,
-			cfg.WebOrigin,
+			httpserver.SecurityControls{
+				WebOrigin:      cfg.WebOrigin,
+				RequestTimeout: cfg.HTTPRequestTimeout,
+				AuthLimiter:    dependencies.AuthLimiter(),
+				SearchLimiter:  dependencies.SearchLimiter(),
+			},
 		),
+		// ReadHeaderTimeout caps slow header attacks; ReadTimeout bounds the whole
+		// request body (the largest legitimate API body is the ~10 MiB selfie search);
+		// WriteTimeout is set above the per-request handler timeout so the handler can
+		// emit a safe timeout response before the connection is force-closed; IdleTimeout
+		// reaps idle keep-alive connections.
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
 	}
 	go func() {
 		slog.Info("api listening", "address", cfg.Address())

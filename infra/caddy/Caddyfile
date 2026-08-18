@@ -1,13 +1,26 @@
 :80 {
-  handle /api/* {
-    reverse_proxy api:8080
-  }
+	# Edge security headers applied to every proxied response. These complement the
+	# app-level headers set by Next.js and the JSON API. HSTS is meaningful only once
+	# this site terminates TLS; it is inert (and harmless) over plain HTTP in local dev.
+	# Only the public web app and the /api and /health surfaces are proxied here; no
+	# internal service (face-ai, workers, Postgres, Redis, Qdrant, MinIO) is exposed.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 
-  handle /health/* {
-    reverse_proxy api:8080
-  }
+	handle /api/* {
+		reverse_proxy api:8080
+	}
 
-  handle {
-    reverse_proxy web:3000
-  }
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
 }

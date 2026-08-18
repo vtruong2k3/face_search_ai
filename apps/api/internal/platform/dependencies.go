@@ -40,6 +40,8 @@ type Dependencies struct {
 	search          *search.Service
 	downloads       *download.Service
 	downloadLimiter *ratelimit.Limiter
+	authLimiter     *ratelimit.Limiter
+	searchLimiter   *ratelimit.Limiter
 }
 
 type Status struct {
@@ -129,6 +131,8 @@ func New(ctx context.Context, cfg config.Config) (*Dependencies, error) {
 		search:          searchService,
 		downloads:       downloadService,
 		downloadLimiter: ratelimit.New(cfg.DownloadRateLimit, cfg.DownloadRateWindow),
+		authLimiter:     ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow),
+		searchLimiter:   ratelimit.New(cfg.SearchRateLimit, cfg.SearchRateWindow),
 	}, nil
 }
 
@@ -140,6 +144,8 @@ func (d *Dependencies) PhotoUploadService() *photo.UploadService     { return d.
 func (d *Dependencies) SearchService() *search.Service               { return d.search }
 func (d *Dependencies) DownloadService() *download.Service           { return d.downloads }
 func (d *Dependencies) DownloadLimiter() *ratelimit.Limiter          { return d.downloadLimiter }
+func (d *Dependencies) AuthLimiter() *ratelimit.Limiter              { return d.authLimiter }
+func (d *Dependencies) SearchLimiter() *ratelimit.Limiter            { return d.searchLimiter }
 func (d *Dependencies) Config() config.Config                        { return d.cfg }
 
 // RunOutboxPublisher starts the outbox polling loop. Call from main in a goroutine;

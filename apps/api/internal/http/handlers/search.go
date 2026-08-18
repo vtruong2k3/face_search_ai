@@ -22,6 +22,11 @@ type publicSearchResponse struct {
 func (h *Search) Public(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxSearchRequestBytes)
 	if err := r.ParseMultipartForm(maxSearchRequestBytes); err != nil {
+		var maxBytes *http.MaxBytesError
+		if errors.As(err, &maxBytes) {
+			writeSearchError(w, http.StatusRequestEntityTooLarge, string(search.CodeSelfieTooLarge), "The selfie is too large.")
+			return
+		}
 		writeSearchError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
 		return
 	}

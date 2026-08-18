@@ -60,8 +60,8 @@ func (h *Photos) SignUploadPart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request uploadRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	result, err := h.uploads.SignPart(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID, partNumber)
@@ -78,8 +78,8 @@ func (h *Photos) CompleteUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request completeUploadRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	result, err := h.uploads.Complete(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID, request.Parts)
@@ -97,8 +97,8 @@ func (h *Photos) AbortUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request uploadRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	if err := h.uploads.Abort(r.Context(), tenant.OrganizationID, r.PathValue("eventId"), r.PathValue("photoId"), request.UploadID); err != nil {
@@ -115,8 +115,8 @@ func (h *Photos) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request createPhotoRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	command, err := photo.NewCreateCommand(request.OriginalFilename, request.ContentType, request.ByteSize, request.ChecksumSHA256)

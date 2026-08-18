@@ -31,13 +31,24 @@ type Config struct {
 	// implementation and testing before Checkpoint 1. It is not a validated
 	// production threshold; the production value is gated on the approved
 	// Checkpoint 1 benchmark. Sourced from SEARCH_NON_PRODUCTION_THRESHOLD.
-	SearchThreshold     float32
-	SearchResultLimit   int
-	DownloadURLTTL      time.Duration
-	DownloadMaxBulk     int
-	DownloadRateLimit   int
-	DownloadRateWindow  time.Duration
-	DependencyTimeout   time.Duration
+	SearchThreshold    float32
+	SearchResultLimit  int
+	DownloadURLTTL     time.Duration
+	DownloadMaxBulk    int
+	DownloadRateLimit  int
+	DownloadRateWindow time.Duration
+	AuthRateLimit      int
+	AuthRateWindow     time.Duration
+	SearchRateLimit    int
+	SearchRateWindow   time.Duration
+	DependencyTimeout  time.Duration
+	// HTTP server and per-request timeouts. HTTPRequestTimeout is a per-request
+	// handler deadline that yields a safe JSON error; the server-level read/write
+	// timeouts are set above it so the handler timeout wins and can respond.
+	HTTPReadTimeout     time.Duration
+	HTTPWriteTimeout    time.Duration
+	HTTPIdleTimeout     time.Duration
+	HTTPRequestTimeout  time.Duration
 	AuthSigningKey      string
 	AuthIssuer          string
 	AuthAudience        string
@@ -79,7 +90,15 @@ func Load() Config {
 		DownloadMaxBulk:       int(boundedInt64Value("DOWNLOAD_MAX_BULK", 50, 1, 200)),
 		DownloadRateLimit:     int(boundedInt64Value("DOWNLOAD_RATE_LIMIT", 30, 1, 1000)),
 		DownloadRateWindow:    boundedDurationValue("DOWNLOAD_RATE_WINDOW", time.Minute, time.Second, time.Hour),
+		AuthRateLimit:         int(boundedInt64Value("AUTH_RATE_LIMIT", 10, 1, 1000)),
+		AuthRateWindow:        boundedDurationValue("AUTH_RATE_WINDOW", time.Minute, time.Second, time.Hour),
+		SearchRateLimit:       int(boundedInt64Value("SEARCH_RATE_LIMIT", 15, 1, 1000)),
+		SearchRateWindow:      boundedDurationValue("SEARCH_RATE_WINDOW", time.Minute, time.Second, time.Hour),
 		DependencyTimeout:     durationValue("DEPENDENCY_TIMEOUT", 3*time.Second),
+		HTTPReadTimeout:       boundedDurationValue("HTTP_READ_TIMEOUT", 30*time.Second, time.Second, 10*time.Minute),
+		HTTPWriteTimeout:      boundedDurationValue("HTTP_WRITE_TIMEOUT", 60*time.Second, time.Second, 10*time.Minute),
+		HTTPIdleTimeout:       boundedDurationValue("HTTP_IDLE_TIMEOUT", 120*time.Second, time.Second, 30*time.Minute),
+		HTTPRequestTimeout:    boundedDurationValue("HTTP_REQUEST_TIMEOUT", 30*time.Second, time.Second, 10*time.Minute),
 		AuthSigningKey:        os.Getenv("AUTH_SIGNING_KEY"),
 		AuthIssuer:            valueOrDefault("AUTH_ISSUER", "face-search-api"),
 		AuthAudience:          valueOrDefault("AUTH_AUDIENCE", "face-search-web"),

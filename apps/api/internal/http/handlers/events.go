@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -10,6 +11,13 @@ import (
 	"github.com/face-search-ai/api/internal/domain/event"
 	"github.com/face-search-ai/api/internal/http/middleware"
 )
+
+// maxJSONBodyBytes bounds JSON request bodies for the auth, event, photo, and
+// download endpoints. It is a deliberately tight cap relative to the multipart
+// selfie-search limit: these endpoints only carry small structured payloads (the
+// largest being a completed-upload part list). Oversized bodies are rejected with
+// a safe 413 before any decoding work.
+const maxJSONBodyBytes = 1 << 20 // 1 MiB
 
 type Events struct {
 	events        *event.Service
@@ -51,8 +59,8 @@ func (h *Events) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request createEventRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	command, err := event.NewCreateCommand(request.Name, request.Visibility, request.ExpiresAt, request.DownloadsEnabled, request.MatchThreshold)
@@ -102,8 +110,8 @@ func (h *Events) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request updateEventRequest
-	if err := decodeStrictJSON(r, &request); err != nil {
-		writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
+	if err := decodeStrictJSON(w, r, &request); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	command, err := event.NewUpdateCommand(request.Name, request.Visibility, request.ExpiresAt, request.DownloadsEnabled, request.MatchThreshold)
@@ -170,8 +178,8 @@ func (h *Events) writeUnavailable(w http.ResponseWriter) {
 	writeAuthError(w, http.StatusNotFound, "not_found", "Resource not found.")
 }
 
-func decodeStrictJSON(r *http.Request, target any) error {
-	decoder := json.NewDecoder(http.MaxBytesReader(nil, r.Body, 1<<20))
+func decodeStrictJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSONBodyBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -180,4 +188,16 @@ func decodeStrictJSON(r *http.Request, target any) error {
 		return io.ErrUnexpectedEOF
 	}
 	return nil
+}
+
+// writeDecodeError maps a request-body decode failure to a safe response: 413 when
+// the body exceeded the endpoint cap and 400 otherwise. Both use the shared error
+// shape and never expose parser internals.
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) {
+		writeAuthError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Request body is too large.")
+		return
+	}
+	writeAuthError(w, http.StatusBadRequest, "invalid_request", "Request is invalid.")
 }

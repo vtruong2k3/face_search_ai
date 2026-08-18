@@ -101,6 +101,20 @@ func TestAuthRegisterRejectsUnknownAndTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestAuthRegisterRejectsOversizedBodyWith413(t *testing.T) {
+	handler, _ := newAuthHandler(t, false)
+	oversized := `{"email":"person@example.com","password":"` + strings.Repeat("a", maxJSONBodyBytes) + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(oversized))
+	response := httptest.NewRecorder()
+	handler.Register(response, request)
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body status=%d, want 413", response.Code)
+	}
+	if body := response.Body.String(); body != "{\"code\":\"payload_too_large\",\"message\":\"Request body is too large.\"}\n" {
+		t.Fatalf("unexpected 413 body: %q", body)
+	}
+}
+
 func TestAuthLoginUsesGenericFailure(t *testing.T) {
 	handler, _ := newAuthHandler(t, false)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"missing@example.com","password":"incorrect-password"}`))

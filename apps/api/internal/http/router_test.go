@@ -4,15 +4,42 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/face-search-ai/api/internal/domain/auth"
 	httpserver "github.com/face-search-ai/api/internal/http"
+	"github.com/face-search-ai/api/internal/http/handlers"
 	"github.com/face-search-ai/api/internal/platform"
+	"github.com/face-search-ai/api/internal/ratelimit"
 )
 
 type checker struct{ statuses map[string]platform.Status }
 
 func (c checker) Check(context.Context) map[string]platform.Status { return c.statuses }
+
+// rejectingAuthRepository fails every lookup so login always returns a generic
+// authentication failure; it lets the router-level rate-limit test drive the
+// login route without a database.
+type rejectingAuthRepository struct{}
+
+func (rejectingAuthRepository) CreateUserWithSession(context.Context, string, string, string, time.Time) (auth.User, error) {
+	return auth.User{}, auth.ErrInvalidCredentials
+}
+func (rejectingAuthRepository) FindUserByEmail(context.Context, string) (auth.User, string, error) {
+	return auth.User{}, "", auth.ErrInvalidCredentials
+}
+func (rejectingAuthRepository) FindUserByID(context.Context, string) (auth.User, error) {
+	return auth.User{}, auth.ErrInvalidCredentials
+}
+func (rejectingAuthRepository) CreateSession(context.Context, string, string, time.Time) (auth.Session, error) {
+	return auth.Session{}, auth.ErrInvalidCredentials
+}
+func (rejectingAuthRepository) RotateSession(context.Context, string, string, time.Time) (auth.Session, error) {
+	return auth.Session{}, auth.ErrInvalidCredentials
+}
+func (rejectingAuthRepository) RevokeSession(context.Context, string) error { return nil }
 
 func TestHealthEndpoints(t *testing.T) {
 	router := httpserver.NewRouter(checker{statuses: map[string]platform.Status{"redis": {OK: true}}})
@@ -32,5 +59,79 @@ func TestReadinessFailure(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("ready returned %d", recorder.Code)
+	}
+}
+
+func TestRouterAppliesSecurityHeadersAndRequestID(t *testing.T) {
+	router := httpserver.NewRouter(checker{statuses: map[string]platform.Status{"redis": {OK: true}}})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health/live", nil))
+	if recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("missing nosniff header: %v", recorder.Header())
+	}
+	if recorder.Header().Get("X-Request-ID") == "" {
+		t.Fatal("responses must carry a correlation request ID")
+	}
+}
+
+func TestRouterCORSPreflightAdvertisesStateChangingMethods(t *testing.T) {
+	router := httpserver.NewRouterWithAuth(checker{}, nil, nil, nil, nil, nil, nil, nil, httpserver.SecurityControls{WebOrigin: "http://localhost:3000"})
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/organizations/org/events/evt", nil)
+	request.Header.Set("Origin", "http://localhost:3000")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("preflight status=%d", recorder.Code)
+	}
+	methods := recorder.Header().Get("Access-Control-Allow-Methods")
+	for _, method := range []string{"PATCH", "DELETE"} {
+		if !strings.Contains(methods, method) {
+			t.Fatalf("preflight must advertise %s, got %q", method, methods)
+		}
+	}
+}
+
+func TestRouterRateLimitsPublicSearch(t *testing.T) {
+	searchHandler := handlers.NewSearch(nil)
+	router := httpserver.NewRouterWithAuth(checker{}, nil, nil, nil, nil, nil, searchHandler, nil, httpserver.SecurityControls{
+		SearchLimiter: ratelimit.New(1, time.Minute),
+	})
+
+	// The first request passes the limiter and reaches the handler (rejected as a
+	// malformed multipart, not throttled); the second is throttled with 429.
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, httptest.NewRequest(http.MethodPost, "/api/v1/public/events/tok", strings.NewReader("{}")))
+	if first.Code == http.StatusTooManyRequests {
+		t.Fatalf("first search request must not be throttled, got %d", first.Code)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, httptest.NewRequest(http.MethodPost, "/api/v1/public/events/tok", strings.NewReader("{}")))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second search request must be throttled, got %d", second.Code)
+	}
+}
+
+func TestRouterRateLimitsAuthLogin(t *testing.T) {
+	service, err := auth.NewService(rejectingAuthRepository{}, strings.Repeat("s", 32), "issuer", "audience", 15*time.Minute, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("auth service: %v", err)
+	}
+	authHandler := handlers.NewAuth(service, false, 24*time.Hour)
+	router := httpserver.NewRouterWithAuth(checker{}, authHandler, service, nil, nil, nil, nil, nil, httpserver.SecurityControls{
+		AuthLimiter: ratelimit.New(1, time.Minute),
+	})
+
+	body := `{"email":"person@example.com","password":"incorrect-password"}`
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body)))
+	if first.Code != http.StatusUnauthorized {
+		t.Fatalf("first login should reach handler and fail auth, got %d", first.Code)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body)))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second login should be throttled, got %d", second.Code)
 	}
 }

@@ -86,7 +86,7 @@ Phase 2 platform-foundation implementation is authorized to proceed independentl
 
 ## Phase 7 — Hardening
 
-- [ ] Task 7.1: Add abuse and HTTP controls
+- [x] Task 7.1: Add abuse and HTTP controls (per-endpoint 1 MiB JSON / ~10 MiB selfie body caps returning safe 413; server read/write/idle timeouts plus a per-request timeout middleware returning safe 503; reused fixed-window limiter extended to auth register/login/refresh keyed by client address and to public selfie search keyed by token+address with safe 429; conservative API security headers and web/edge browser headers with camera=(self) Permissions-Policy and a deliberately partial CSP documented as deferred; CORS refined to advertise PATCH/DELETE for Event mutations; SameSite=Lax scoped HttpOnly refresh cookie retained for CSRF safety; request IDs on every safe error path; Go middleware/handler/router tests for 413, 429 on auth+search, timeout, headers, and CORS; Go fmt/vet/test/build and web lint/typecheck/test/build and docker compose config + caddy validate pass)
 - [ ] Task 7.2: Add observability and operational health
 - [ ] Task 7.3: Implement lifecycle deletion and backup restore
 - [ ] Task 7.4: Run release verification and complete documentation
