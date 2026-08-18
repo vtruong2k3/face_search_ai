@@ -57,6 +57,8 @@ export function createEvent(organizationId: string, input: CreateEvent): Promise
 export function updateEvent(organizationId: string, eventId: string, input: UpdateEvent): Promise<Event> { return eventRequest(`/organizations/${organizationId}/events/${eventId}`, { method: "PATCH", body: JSON.stringify(input) }); }
 export async function archiveEvent(organizationId: string, eventId: string): Promise<void> { const response = await authRequest(`/organizations/${organizationId}/events/${eventId}`, { method: "DELETE" }); if (!response.ok) throw new Error("Event request could not be completed."); }
 export function getEventStatus(organizationId: string, eventId: string): Promise<EventProcessingStatus> { return eventRequest(`/organizations/${organizationId}/events/${eventId}/status`); }
+export function listPhotos(organizationId: string, eventId: string): Promise<Photo[]> { return photoRequest(photoPath(organizationId, eventId)); }
+export function reprocessPhoto(organizationId: string, eventId: string, photoId: string): Promise<Photo> { return photoRequest(`${photoPath(organizationId, eventId, photoId)}/reprocess`, { method: "POST" }); }
 export async function getPublicEvent(publicToken: string): Promise<PublicEvent> { const response = await fetch(`${apiBaseUrl}/api/v1/public/events/${encodeURIComponent(publicToken)}`, { cache: "no-store" }); if (!response.ok) throw new Error("Public Event is unavailable."); return response.json() as Promise<PublicEvent>; }
 
 async function photoRequest<T>(path: string, init?: RequestInit): Promise<T> {
